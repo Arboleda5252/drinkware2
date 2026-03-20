@@ -14,14 +14,14 @@ export default function Page() {
 
             <div className="mt-8 flex flex-col gap-3">
               <Link
-                href="/account/login"
+                href="/user_account/login"
                 className="inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-medium shadow-sm ring-1 ring-gray-200 hover:bg-sky-300"
               >
                 Iniciar sesión
               </Link>
 
               <Link
-                href="/account/registro"
+                href="/user_account/registro"
                 className="inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold text-black shadow-sm transition hover:shadow-lg bg-gray-200 hover:bg-sky-300"
               >
                 Registrarse
