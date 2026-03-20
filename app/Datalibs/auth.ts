@@ -36,7 +36,7 @@ export async function authenticateUser(nombreusuario: string, password: string):
         WHERE idusuario = $1`,
       [user.idusuario]
     );
-    activated = updateResult.rowCount > 0;
+    activated = (updateResult.rowCount ?? 0) > 0;
   }
 
   const token = await signSession({ idusuario: user.idusuario, nombreusuario: user.nombreusuario });
