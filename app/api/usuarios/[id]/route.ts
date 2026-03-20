@@ -5,6 +5,8 @@ import { getUserFromSession } from '@/app/Datalibs/auth';
 
 export const runtime = 'nodejs';
 
+type UsuarioRouteParams = Promise<{ id: string }>;
+
 type UsuarioDetalle = {
   id: number;
   nombre: string;
@@ -37,12 +39,13 @@ async function resolveTargetId(idParam: string): Promise<number | null> {
 // GET
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: UsuarioRouteParams }
 ) {
-  const id = await resolveTargetId(params.id);
+  const { id: routeId } = await params;
+  const id = await resolveTargetId(routeId);
   if (!id) {
-    const status = params.id === 'me' ? 401 : 400;
-    const error = params.id === 'me' ? 'No autenticado' : 'ID invalido';
+    const status = routeId === 'me' ? 401 : 400;
+    const error = routeId === 'me' ? 'No autenticado' : 'ID invalido';
     return NextResponse.json({ ok: false, error }, { status });
   }
 
@@ -81,11 +84,12 @@ export async function GET(
 }
 
 // PUT
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const id = await resolveTargetId(params.id);
+export async function PUT(req: NextRequest, { params }: { params: UsuarioRouteParams }) {
+  const { id: routeId } = await params;
+  const id = await resolveTargetId(routeId);
   if (!id) {
-    const status = params.id === 'me' ? 401 : 400;
-    const error = params.id === 'me' ? 'No autenticado' : 'ID invalido';
+    const status = routeId === 'me' ? 401 : 400;
+    const error = routeId === 'me' ? 'No autenticado' : 'ID invalido';
     return NextResponse.json({ ok: false, error }, { status });
   }
 
@@ -135,19 +139,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 // DELETE
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: UsuarioRouteParams }
 ) {
   try {
+    const { id: routeId } = await params;
     const sessionUser = await getUserFromSession();
     if (!sessionUser) {
       return NextResponse.json({ ok: false, error: 'No autenticado' }, { status: 401 });
     }
 
     let targetId: number | null = null;
-    if (params.id === 'me') {
+    if (routeId === 'me') {
       targetId = sessionUser.idusuario;
     } else {
-      targetId = parseId(params.id);
+      targetId = parseId(routeId);
     }
 
     if (!targetId) {
