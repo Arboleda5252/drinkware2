@@ -18,6 +18,16 @@ const pool: Pool =
     },
   });
 
+  //   const pool: Pool =
+  // global.pgPool ??
+  // new Pool({
+  //   user: 'postgres',
+  //   password: 'system',
+  //   host: 'localhost',
+  //   port: 5432,
+  //   database: 'drinkwarebd',
+  // });
+
 pool.on('error', (error) => {
   console.error('[database] Error inesperado en el pool de conexiones', error);
 });
