@@ -19,9 +19,10 @@ type ProductoDetalle = {
 // GET
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: routeId } = await params;
     const { rows } = await sql<ProductoDetalle>(`
       SELECT
         p.idproducto AS id,
@@ -42,7 +43,7 @@ export async function GET(
       FROM public.producto AS p
       WHERE p.idproducto = $1
       LIMIT 1;
-    `, [Number(params.id)]);
+    `, [Number(routeId)]);
 
     if (rows.length === 0) {
       return NextResponse.json(
@@ -62,9 +63,10 @@ export async function GET(
 }
 
 // POST
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = Number(params.id);
+    const { id: routeId } = await params;
+    const id = Number(routeId);
     if (Number.isNaN(id)) {
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
@@ -235,9 +237,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 // PUT
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = Number(params.id);
+    const { id: routeId } = await params;
+    const id = Number(routeId);
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json(
         { ok: false, error: 'ID inválido' },

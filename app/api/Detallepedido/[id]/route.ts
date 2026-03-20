@@ -3,7 +3,7 @@ import { sql } from "@/app/Datalibs/database";
 
 export const runtime = "nodejs";
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 type DetallePedidoRow = {
   id: number;
@@ -59,7 +59,8 @@ const toDto = (row: DetallePedidoRow) => ({
 
 // GET
 export async function GET(_req: NextRequest, { params }: Params) {
-  const id = Number(params.id);
+  const { id: routeId } = await params;
+  const id = Number(routeId);
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ ok: false, error: "ID invalido" }, { status: 400 });
   }
@@ -81,7 +82,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 // PUT
 export async function PUT(req: NextRequest, { params }: Params) {
-  const id = Number(params.id);
+  const { id: routeId } = await params;
+  const id = Number(routeId);
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ ok: false, error: "ID invalido" }, { status: 400 });
   }
@@ -322,7 +324,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 // DELETE
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const id = Number(params.id);
+  const { id: routeId } = await params;
+  const id = Number(routeId);
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ ok: false, error: "ID invalido" }, { status: 400 });
   }
