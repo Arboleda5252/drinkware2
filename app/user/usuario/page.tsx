@@ -239,7 +239,7 @@ export default function Page() {
   };
 
   return (
-    <div className="min-h-screen w-full text-white">
+    <div className="min-h-screen w-full rounded-[2rem] bg-white shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
       <div className="mx-auto flex max-w-md flex-col items-center justify-center gap-4 px-6 py-24 text-center">
         <h1 className="text-3xl font-semibold text-black">Panel de usuario</h1>
         <p className="text-slate-900">
