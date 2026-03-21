@@ -70,11 +70,7 @@ export default function Page() {
 
           <div className="w-full">
             <div className="rounded-[2rem] border border-white/10 bg-white/10 p-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8 md:p-10">
-              <span className="inline-flex rounded-full border border-sky-300/30 bg-sky-400/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">
-                Distribuidora de Licores
-              </span>
-
-              <h1 className="mt-5 text-4xl font-extrabold uppercase tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
+              <h1 className="mt-5 text-3xl font-extrabold uppercase tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
                 Drinkware
               </h1>
 

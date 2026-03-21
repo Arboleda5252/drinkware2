@@ -12,6 +12,7 @@ type UsuarioListado = {
   apellido: string;
   correo: string;
   documento: string;
+  nombreusuario: string;
   rol: string | null;
   activo: boolean;
 };
@@ -26,6 +27,7 @@ export async function GET() {
         u.apellido,
         u.email AS correo,
         u.documento,
+        u.nombreusuario,
         r.rol,
         u.activo
       FROM usuario AS u
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   const campos = [
     'nombre', 'apellido', 'tipo_documento', 'documento', 'telefono', 'correo', 'ciudad', 'direccion',
-    'nombreusuario', 'password', 'fecha_nacimiento', 'id_rol'
+    'nombreusuario', 'password', 'fecha_nacimiento', 'id_rol', 'activo'
   ];
   const columnas = [];
   const valores = [];

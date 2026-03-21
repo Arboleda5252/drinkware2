@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 
 export default function RegisterForm() {
+  const router = useRouter();
   const [loading, setLoading] = React.useState(false);
   const [edadError, setEdadError] = React.useState<string>("");
   const [documentValue, setDocumentValue] = React.useState("");
@@ -10,6 +12,11 @@ export default function RegisterForm() {
   const [documentInfo, setDocumentInfo] = React.useState("");
   const [documentChecking, setDocumentChecking] = React.useState(false);
   const [nombre, setNombre] = React.useState("");
+  const [correo, setCorreo] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [usernameError, setUsernameError] = React.useState("");
+  const [usernameInfo, setUsernameInfo] = React.useState("");
+  const [usernameChecking, setUsernameChecking] = React.useState(false);
   const [telefono, setTelefono] = React.useState("");
   const [direccion, setDireccion] = React.useState("");
 
@@ -113,19 +120,87 @@ export default function RegisterForm() {
     [documentValue]
   );
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    // Restriccion menor de edad
-    if (!e.currentTarget.checkValidity()) {
-      e.currentTarget.reportValidity();
+  const validarNombreUsuario = React.useCallback(async () => {
+    const usernameValue = username.trim();
+    if (!usernameValue) {
+      setUsernameError("");
+      setUsernameInfo("");
+      return false;
+    }
+
+    setUsernameChecking(true);
+    setUsernameError("");
+    setUsernameInfo("");
+
+    const normalize = (value: unknown) =>
+      typeof value === "string" ? value.trim().toLowerCase() : "";
+
+    try {
+      const usuariosRes = await fetch("/api/usuarios", { cache: "no-store" });
+      if (!usuariosRes.ok) {
+        throw new Error("No se pudo consultar usuarios");
+      }
+
+      const usuariosJson = await usuariosRes.json().catch(() => ({}));
+      const usuarios: any[] = Array.isArray(usuariosJson?.data) ? usuariosJson.data : [];
+      const existe = usuarios.some(
+        (user) => normalize(user.nombreusuario) === normalize(usernameValue)
+      );
+
+      if (existe) {
+        setUsernameError("El nombre de usuario ya existe.");
+        return false;
+      }
+
+      setUsernameInfo("Nombre de usuario disponible.");
+      return true;
+    } catch (error) {
+      console.error("[Registro] Validacion de usuario", error);
+      setUsernameError("No se pudo validar el nombre de usuario.");
+      return false;
+    } finally {
+      setUsernameChecking(false);
+    }
+  }, [username]);
+
+  function sanitizePhone(value: string) {
+    return value.replace(/\D/g, "");
+  }
+
+  function validarCorreo(input: HTMLInputElement) {
+    const value = input.value.trim();
+    if (!value) {
+      input.setCustomValidity("");
       return;
     }
 
-    const fd = new FormData(e.currentTarget);
+    if (!value.includes("@")) {
+      input.setCustomValidity("El correo debe incluir un @.");
+    } else {
+      input.setCustomValidity("");
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formElement = e.currentTarget;
+    // Restriccion menor de edad
+    if (!formElement.checkValidity()) {
+      formElement.reportValidity();
+      return;
+    }
+
+    const fd = new FormData(formElement);
 
     const documentoValido = await validarDocumento(false);
     if (!documentoValido) {
-      (e.currentTarget.elements.namedItem("documento") as HTMLInputElement | null)?.focus();
+      (formElement.elements.namedItem("documento") as HTMLInputElement | null)?.focus();
+      return;
+    }
+
+    const usuarioValido = await validarNombreUsuario();
+    if (!usuarioValido) {
+      (formElement.elements.namedItem("nombre_usuario") as HTMLInputElement | null)?.focus();
       return;
     }
 
@@ -134,14 +209,15 @@ export default function RegisterForm() {
       apellido: String(fd.get("apellido") || ""),
       tipo_documento: String(fd.get("tipo_documento") || ""),
       documento: documentValue.trim(),
-      correo: String(fd.get("correo_electronico") || ""),
+      correo: correo.trim(),
       telefono: telefono.trim(),
-      nombreusuario: String(fd.get("nombre_usuario") || ""),
+      nombreusuario: username.trim(),
       password: String(fd.get("contrasena") || ""),
       fecha_nacimiento: String(fd.get("fecha_nacimiento") || ""),
       ciudad: String(fd.get("ciudad") || ""),
       direccion: direccion.trim(),
       id_rol: 1,
+      activo: true,
     };
 
     setLoading(true);
@@ -153,42 +229,32 @@ export default function RegisterForm() {
       });
       const json = await res.json();
       if (res.ok && json.ok) {
-        const nuevoIdUsuario = Number(
-          json.id ?? json?.data?.id ?? json?.user?.idusuario ?? json?.user?.id
-        );
-        const documentoNormalizado = documentValue.trim();
-        if (documentoNormalizado && Number.isInteger(nuevoIdUsuario) && nuevoIdUsuario > 0) {
-          try {
-            const adoptarRes = await fetch("/api/Detallepedido/adoptar", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                documento: documentoNormalizado,
-                idUsuario: nuevoIdUsuario,
-              }),
-            });
-            if (!adoptarRes.ok) {
-              const adoptarJson = await adoptarRes.json().catch(() => ({}));
-              console.warn("[Registro] No se pudieron asociar pedidos previos", adoptarJson);
-            }
-          } catch (adoptError) {
-            console.warn("[Registro] Error al asociar pedidos previos", adoptError);
-          }
+        const loginRes = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nombreusuario: username.trim(),
+            password: String(fd.get("contrasena") || ""),
+          }),
+        });
+
+        const loginJson = await loginRes.json().catch(() => ({}));
+        if (!loginRes.ok || loginJson?.ok === false) {
+          alert(
+            "Usuario registrado correctamente, pero no se pudo iniciar sesion automaticamente."
+          );
+          router.push("/user_account/login");
+          return;
         }
 
-        alert("Usuario registrado correctamente");
-        e.currentTarget.reset();
-        setEdadError("");
-        setDocumentValue("");
-        setDocumentError("");
-        setDocumentInfo("");
-        setNombre("");
-        setTelefono("");
-        setDireccion("");
+        router.push("/user");
+        router.refresh();
+        return;
       } else {
         alert(json.error || "Error al registrar usuario");
       }
     } catch (err) {
+      console.error("[Registro] Error inesperado", err);
       alert("Error inesperado");
     } finally {
       setLoading(false);
@@ -302,6 +368,10 @@ export default function RegisterForm() {
             required
             autoComplete="email"
             placeholder="tuemail@example.com"
+            value={correo}
+            onChange={(event) => setCorreo(event.target.value)}
+            onInput={(event) => validarCorreo(event.currentTarget)}
+            onBlur={(event) => validarCorreo(event.currentTarget)}
             className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
@@ -316,9 +386,17 @@ export default function RegisterForm() {
             type="tel"
             required
             autoComplete="tel"
-            placeholder="+57 300 000 0000"
+            inputMode="numeric"
+            pattern="[0-9]+"
+            placeholder="3000000000"
             value={telefono}
-            onChange={(event) => setTelefono(event.target.value)}
+            onChange={(event) => setTelefono(sanitizePhone(event.target.value))}
+            onPaste={(event) => {
+              const pasted = event.clipboardData.getData("text");
+              const sanitized = sanitizePhone(pasted);
+              event.preventDefault();
+              setTelefono((prev) => `${prev}${sanitized}`);
+            }}
             className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
@@ -334,8 +412,32 @@ export default function RegisterForm() {
             required
             autoComplete="username"
             placeholder="Usuario"
+            value={username}
+            onChange={(event) => {
+              setUsername(event.target.value);
+              if (usernameError) {
+                setUsernameError("");
+              }
+              if (usernameInfo) {
+                setUsernameInfo("");
+              }
+            }}
+            onBlur={() => {
+              void validarNombreUsuario();
+            }}
             className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
+          {usernameChecking && (
+            <p className="mt-1 text-xs text-gray-500">Validando usuario...</p>
+          )}
+          {usernameError && (
+            <p className="mt-1 text-xs font-semibold text-red-600" role="alert">
+              {usernameError}
+            </p>
+          )}
+          {!usernameError && usernameInfo && (
+            <p className="mt-1 text-xs text-emerald-600">{usernameInfo}</p>
+          )}
         </div>
 
         <div>

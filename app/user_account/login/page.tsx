@@ -43,9 +43,9 @@ export default function Page() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="absolute inset-0 bg-[url(/img/vino.jpg)] bg-cover bg-center opacity-30 -z-10"></div>
-      <main className="relative min-h-screen flex items-center justify-center p-6">
+    <div className="relative min-h-screen overflow-hidden bg-black">
+      <div className="absolute inset-0 bg-[url(/img/vino.jpg)] bg-cover bg-center opacity-30"></div>
+      <main className="relative min-h-screen bg-black/40 flex items-center justify-center p-6">
         <section className="w-full max-w-sm">
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-8">
             <h1 className="text-2xl font-bold text-center">Iniciar sesión</h1>
@@ -88,7 +88,7 @@ export default function Page() {
             </button>
           </form>
           <div className="mt-4 text-center text-gray-600">
-            <Link href="/account/registro" className="text-sky-900 hover:underline font-semibold">
+            <Link href="/user_account/registro" className="text-sky-300 hover:underline font-semibold">
               Regístrate aquí
             </Link>
           </div>
