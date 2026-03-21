@@ -25,7 +25,7 @@ export default async function Nav() {
         <div className="basis-1/2">
             <div className='flex justify-end space-x-4 text-white'>
                 <div className='justify-center'>
-                    <Link href="pqrs/contactenos" className='flex flex-col items-center pr-4 px-2 hover:text-sky-400' >
+                    <Link href="/pqrs/contactenos" className='flex flex-col items-center pr-4 px-2 hover:text-sky-400' >
                         <MdOutlineLiveHelp className='text-4xl my-1'/>
                         <p>Contáctenos</p> 
                     </Link> 

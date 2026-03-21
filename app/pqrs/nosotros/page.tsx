@@ -1,8 +1,8 @@
 export default function Page() {
   return (
-     <main className="bg-gray-100 font-sans">
+     <main className="bg-[#0b1220] bg-gradient-to-r font-sans">
       {/* Encabezado */}
-      <header className="bg-gradient-to-r from-purple-700 to-pink-600 text-white py-16 text-center shadow-lg mt-20">
+      <header className="bg-[#0b1220] bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95 text-white py-16 text-center shadow-lg">
         <h1 className="text-5xl font-extrabold tracking-wide">Sobre Nosotros</h1>
         <p className="mt-3 text-xl">
           Conoce más acerca de nuestra historia, misión y visión

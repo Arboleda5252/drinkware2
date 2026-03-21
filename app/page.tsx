@@ -1,159 +1,159 @@
 "use client";
 
 import Image from "next/image";
-import * as React from "react";
+import Link from "next/link";
 
-const slides = [
-  { src: "/img/cervezas.png", alt: "Catalogo de cervezas premium" },
-  { src: "/img/rones.png", alt: "Seleccion exclusiva de rones" },
-  { src: "/img/vino.jpg", alt: "Vinos para cada celebracion" },
-  { src: "/img/descorchar.jpg", alt: "Momentos para brindar con Drinkware" },
-  { src: "/img/copa.png", alt: "Experiencias inolvidables con licores" },
+const featuredImages = [
+  {
+    src: "/img/caldas.jpg",
+    alt: "Catálogo de rones premium",
+  },
+  {
+    src: "/img/vino.jpg",
+    alt: "Vinos para cada celebración",
+  },
+  {
+    src: "/img/club.jpg",
+    alt: "Selección exclusiva de cervezas artesanales",
+  },
 ];
 
 export default function Page() {
-  const [currentSlide, setCurrentSlide] = React.useState(0);
-
-  const goToSlide = React.useCallback((index: number) => {
-    setCurrentSlide((index + slides.length) % slides.length);
-  }, []);
-
   return (
-    <main className="bg-gray-100 text-gray-800">
-      <section className="relative mt-16 h-[480px] overflow-hidden rounded-b-3xl bg-black shadow-2xl md:h-[540px]">
-        {slides.map((slide, index) => (
-          <div
-            key={slide.src}
-            className={`absolute inset-0 transition-opacity ease-in-out ${
-              index === currentSlide ? "opacity-100" : "opacity-0"
-            }`}
-            aria-hidden={index !== currentSlide}
-          >
-            <Image
-              src={slide.src}
-              alt={slide.alt}
-              fill
-              priority={index === 0}
-              sizes="100vw"
-              className="object-cover object-center"
-            />
+    <main className="bg-black text-gray-800">
+      <section className="relative overflow-hidden rounded-b-[2.5rem] bg-[#0b1220] shadow-2xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.06),transparent_32%)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95" />
+
+        <div className="relative z-10 mx-auto grid min-h-[680px] max-w-7xl grid-cols-1 items-center gap-12 px-6 py-14 sm:px-10 lg:grid-cols-[0.95fr_1.05fr] lg:px-16">
+          <div className="relative mx-auto h-[430px] w-full max-w-[520px]">
+            <div className="absolute left-4 top-10 h-24 w-24 rounded-full bg-sky-400/20 blur-3xl" />
+            <div className="absolute bottom-6 right-10 h-24 w-24 rounded-full bg-white/10 blur-3xl" />
+
+            <div className="absolute left-0 top-[88px] h-[290px] w-[290px] overflow-hidden rounded-full border border-white/20 shadow-[0_25px_60px_rgba(0,0,0,0.35)] sm:h-[340px] sm:w-[340px]">
+              <Image
+                src={featuredImages[0].src}
+                alt={featuredImages[0].alt}
+                fill
+                sizes="(max-width: 640px) 290px, 340px"
+                className="object-cover object-center brightness-110 contrast-125 saturate-150"
+              />
+              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-black/20" />
+            </div>
+
+            <div className="absolute right-6 top-0 h-[150px] w-[150px] overflow-hidden rounded-full border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.3)] sm:h-[180px] sm:w-[180px]">
+              <Image
+                src={featuredImages[1].src}
+                alt={featuredImages[1].alt}
+                fill
+                sizes="(max-width: 640px) 150px, 180px"
+                className="object-cover object-center brightness-110 contrast-125 saturate-150"
+              />
+              <div className="absolute inset-0 bg-black/10" />
+            </div>
+
+            <div className="absolute bottom-2 right-0 h-[160px] w-[160px] overflow-hidden rounded-full border border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.3)] sm:h-[190px] sm:w-[190px]">
+              <Image
+                src={featuredImages[2].src}
+                alt={featuredImages[2].alt}
+                fill
+                sizes="(max-width: 640px) 160px, 190px"
+                className="object-cover object-center brightness-110 contrast-125 saturate-150"
+              />
+              <div className="absolute inset-0 bg-black/10" />
+            </div>
+
+            <div className="absolute bottom-0 left-4 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-medium text-white/90 backdrop-blur-md sm:text-sm">
+              Entrega rápida
+            </div>
           </div>
-        ))}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/30" />
 
-        <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center text-white sm:px-8">
-         
-          <h1 className="text-3xl font-extrabold uppercase tracking-[0.3em] text-sky-400 drop-shadow md:text-5xl">
-            Drinkware
-          </h1>
-          <p className="mt-6 max-w-3xl text-base font-medium leading-relaxed text-white/90 sm:text-lg md:text-xl">
-            Somos tu distribuidora de licores comprometida con ofrecer productos de alta
-            calidad y un excelente servicio. Contamos con un catalogo variado que satisface
-            los gustos de todos nuestros clientes, siempre garantizando confianza,
-            cumplimiento y responsabilidad.
-          </p>
+          <div className="w-full">
+            <div className="rounded-[2rem] border border-white/10 bg-white/10 p-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8 md:p-10">
+              <span className="inline-flex rounded-full border border-sky-300/30 bg-sky-400/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-sky-200">
+                Distribuidora de Licores
+              </span>
+
+              <h1 className="mt-5 text-4xl font-extrabold uppercase tracking-[0.18em] text-white sm:text-5xl md:text-6xl">
+                Drinkware
+              </h1>
+
+              <p className="mt-6 text-base leading-8 text-white/85 [text-align:justify] sm:text-lg">
+                Descubre una experiencia moderna y confiable para comprar tus
+                bebidas favoritas en un solo lugar. En{" "}
+                <span className="font-semibold text-sky-300">Drinkware</span> encontrarás
+                una cuidada selección de{" "}
+                <span className="font-semibold text-white">
+                  aguardientes, cervezas, rones, whisky, vinos
+                </span>{" "}
+                y mucho más, pensada para reuniones, celebraciones, fiestas, regalos especiales o
+                simplemente para disfrutar productos de excelente calidad en cualquier
+                momento.
+              </p>
+
+              <p className="mt-4 text-base leading-8 text-white/78 [text-align:justify] sm:text-lg">
+                Nuestra página está diseñada para que puedas{" "}
+                <span className="font-semibold text-white">registrarte fácilmente</span>,
+                explorar el catálogo, comprar de forma rápida y elegir la opción que más
+                te convenga:{" "}
+                <span className="font-semibold text-white">retiro en tienda</span> o{" "}
+                <span className="font-semibold text-white">entrega a domicilio</span>. Te
+                ofrecemos una atención cercana, ágil y disponible para acompañarte en cada
+                compra con comodidad y seguridad.
+              </p>
+
+              <p className="mt-4 text-base leading-8 text-white/78 [text-align:justify] sm:text-lg">
+                También puedes visitarnos en nuestra tienda ubicada en{" "}
+                <span className="font-semibold text-white">
+                  Calle 123 # 45-67, Medellín, Colombia
+                </span>
+                . Estamos disponibles{" "}
+                <span className="font-semibold text-white">las 24 horas</span> para
+                atenderte. Si prefieres comunicarte con nosotros, puedes hacerlo por{" "}
+                <span className="font-semibold text-white">WhatsApp o llamada</span> al{" "}
+                <span className="font-semibold text-sky-300">+57 300 123 4567</span>.
+              </p>
+
+              <div className="mt-8 flex flex-col items-center gap-3 text-center sm:flex-row sm:flex-wrap sm:justify-center">
+                <Link
+                  href="/pqrs/nosotros"
+                  className="inline-flex min-w-[220px] items-center justify-center rounded-full border border-sky-300/40 bg-sky-400/10 px-6 py-3 text-sm font-semibold text-sky-100 transition duration-300 hover:scale-[1.02] hover:bg-sky-400/20"
+                >
+                  Quienes somos
+                </Link>
+
+                <Link
+                  href="/productos"
+                  className="inline-flex min-w-[220px] items-center justify-center rounded-full bg-sky-400 px-6 py-3 text-sm font-semibold text-slate-950 transition duration-300 hover:scale-[1.02] hover:bg-sky-300"
+                >
+                  Explorar Productos
+                </Link>
+
+                <Link
+                  href="/pqrs/contactenos"
+                  className="inline-flex min-w-[220px] items-center justify-center rounded-full border border-white/20 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition duration-300 hover:bg-white/20"
+                >
+                  Contáctanos
+                </Link>
+              </div>
+
+              <div className="mt-7 grid gap-3 text-sm text-center text-white/75 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+                  <span className="block font-semibold text-white py-3">Compra en tienda</span>
+                  Elige, paga y recoge a tu ritmo: rápido, seguro y cómodo.
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+                  <span className="block font-semibold text-white py-3">Domicilio</span>
+                  Recibe tus productos de forma rápida y segura.
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+                  <span className="block font-semibold text-white py-3">Disponibilidad 24/7</span>
+                  Atención continua para cualquier ocasión.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => goToSlide(currentSlide - 1)}
-          className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white transition hover:bg-white/40 focus:outline-none focus:ring-2 focus:ring-white"
-          aria-label="Anterior"
-        >
-          <span aria-hidden className="text-2xl leading-none">
-            &lt;
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => goToSlide(currentSlide + 1)}
-          className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/20 p-3 text-white transition hover:bg-white/40 focus:outline-none focus:ring-2 focus:ring-white"
-          aria-label="Siguiente"
-        >
-          <span aria-hidden className="text-2xl leading-none">
-            &gt;
-          </span>
-        </button>
-
-        <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-2">
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() => goToSlide(index)}
-              className={`h-2.5 w-2.5 rounded-full transition ${
-                index === currentSlide ? "bg-white" : "bg-white/40 hover:bg-white/60"
-              }`}
-              aria-label={`Ir a la imagen ${index + 1}`}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section
-        id="quienes-somos"
-        className="mx-auto my-16 max-w-5xl rounded-xl bg-white p-8 shadow-lg"
-      >
-        <h2 className="relative pb-3 text-center text-3xl font-bold text-purple-700 after:mt-3 after:block after:h-1 after:w-20 after:bg-pink-600 after:content-['']">
-          Quienes Somos?
-        </h2>
-        <p className="mt-6 text-lg text-justify">
-          En <strong>Drinkware</strong> somos una distribuidora de licores comprometida con
-          ofrecer productos de alta calidad y un excelente servicio. Contamos con un
-          catalogo variado que satisface los gustos de todos nuestros clientes, siempre
-          garantizando confianza, cumplimiento y responsabilidad.
-        </p>
-      </section>
-
-      <section
-        id="mision"
-        className="mx-auto my-16 max-w-5xl rounded-xl bg-white p-8 shadow-lg"
-      >
-        <h2 className="relative pb-3 text-center text-3xl font-bold text-purple-700 after:mt-3 after:block after:h-1 after:w-20 after:bg-pink-600 after:content-['']">
-          Mision
-        </h2>
-        <p className="mt-6 text-lg text-justify">
-          Nuestra mision es llevar a cada cliente experiencias unicas a traves de la
-          distribucion responsable de licores nacionales e internacionales, ofreciendo
-          precios competitivos y un servicio agil y seguro.
-        </p>
-      </section>
-
-      <section
-        id="vision"
-        className="mx-auto my-16 max-w-5xl rounded-xl bg-white p-8 shadow-lg"
-      >
-        <h2 className="relative pb-3 text-center text-3xl font-bold text-purple-700 after:mt-3 after:block after:h-1 after:w-20 after:bg-pink-600 after:content-['']">
-          Vision
-        </h2>
-        <p className="mt-6 text-lg text-justify">
-          Ser reconocidos como la distribuidora de licores lider en el pais,
-          destacandonos por la innovacion, la confianza y el compromiso con nuestros
-          clientes, proveedores y la comunidad.
-        </p>
-      </section>
-
-      <section
-        id="valor-agregado"
-        className="mx-auto my-16 max-w-5xl rounded-xl border-l-8 border-orange-500 bg-orange-50 p-8 shadow-lg"
-      >
-        <h2 className="relative pb-3 text-center text-3xl font-bold text-orange-600 after:mt-3 after:block after:h-1 after:w-20 after:bg-orange-500 after:content-['']">
-          Valor Agregado
-        </h2>
-        <ul className="mt-6 list-inside list-disc space-y-3 text-lg">
-          <li>
-            <strong>Atencion personalizada:</strong> servicio cercano, adaptado a las
-            necesidades de cada cliente.
-          </li>
-          <li>
-            <strong>Variedad de productos:</strong> amplio portafolio de licores nacionales e
-            importados con disponibilidad inmediata.
-          </li>
-          <li>
-            <strong>Distribucion rapida:</strong> sistema logistico eficiente para que tu pedido
-            llegue a tiempo y en perfectas condiciones.
-          </li>
-        </ul>
       </section>
     </main>
   );
