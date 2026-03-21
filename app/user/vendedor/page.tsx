@@ -653,7 +653,7 @@ export default function Page() {
 
   return (
     <section className="w-full bg-slate-50 py-10">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 rounded-2xl bg-white p-8 shadow-lg">
+      <div className="mx-auto flex max-w-5xl flex-col gap-8 rounded-2xl bg-white p-8 text-[15px] md:text-base shadow-lg">
         <PageHeader onOpenInventory={handleInventoryButtonClick} />
 
         <div className="grid gap-6 md:grid-cols-2">

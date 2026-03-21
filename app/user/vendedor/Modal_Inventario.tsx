@@ -24,8 +24,8 @@ export function InventoryModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 px-4 py-8 text-slate-700">
       <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b pb-4">
-          <div>
+        <div className="relative border-b pb-4">
+          <div className="text-center">
             <h3 className="text-2xl font-bold text-slate-900">Listado de productos</h3>
             <p className="text-sm text-slate-500">Consulta el stock actual</p>
           </div>
@@ -33,7 +33,7 @@ export function InventoryModal({
             type="button"
             aria-label="Cerrar inventario"
             onClick={onClose}
-            className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+            className="absolute right-0 top-0 rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
           >
             X
           </button>
