@@ -27,6 +27,7 @@ type ProductoApi = Omit<Producto, "estado"> & {
 
 type ItemCarrito = {
   detalleId: number;
+  pedidoId: number;
   id: number;
   nombre: string;
   precio: number;
@@ -71,6 +72,7 @@ export default function Page() {
   >({});
   const [usuarioActivo, setUsuarioActivo] = React.useState<UsuarioActivo | null>(null);
   const [sesionCargada, setSesionCargada] = React.useState(false);
+  const [pedidoActivoId, setPedidoActivoId] = React.useState<number | null>(null);
   const actualizarStockEnEstado = React.useCallback((productoId: number, nuevoStock: number) => {
     setProductos((prev) =>
       prev.map((producto) => (producto.id === productoId ? { ...producto, stock: nuevoStock } : producto))
@@ -220,67 +222,136 @@ export default function Page() {
   // MANEJO DE CARRITO
   // =========================================================
 
-  const registrarDetallePedido = React.useCallback(
-    async (producto: Producto, cantidad: number) => {
-      const payload: Record<string, unknown> = {
-        productoId: producto.id,
-        cantidad,
-        precioProducto: producto.precio,
-        subtotal: cantidad * producto.precio,
-      };
-
-      if (usuarioActivo?.id) {
-        payload.idUsuario = usuarioActivo.id;
-      } else {
-        console.warn("[Usuarios] no hay un usuario activo, se envia sin idUsuario");
+  const crearPedido = React.useCallback(
+    async (subtotal = 0) => {
+      if (!usuarioActivo?.id) {
+        return null;
       }
 
       try {
-        const response = await fetch("/api/Detallepedido", {
+        const response = await fetch("/api/pedidos", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            idCliente: usuarioActivo.id,
+            subtotal,
+          }),
         });
 
-        const payloadResp = await response.json().catch(() => null);
-        if (!response.ok || !payloadResp?.ok) {
-          const mensaje = payloadResp?.error ?? response.statusText;
-          console.error("[Detallepedido] no se pudo registrar el producto:", mensaje);
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok) {
+          const mensaje = payload?.error ?? response.statusText;
+          console.error("[pedidos] no se pudo crear el pedido:", mensaje);
           return null;
         }
-        return payloadResp.data ?? null;
+
+        return payload.data ?? null;
       } catch (error) {
-        console.error("[Detallepedido] error al registrar el producto", error);
+        console.error("[pedidos] error al crear el pedido", error);
         return null;
       }
     },
     [usuarioActivo]
   );
 
+  const actualizarPedido = React.useCallback(async (pedidoId: number, subtotal: number) => {
+    try {
+      const response = await fetch(`/api/pedidos/${pedidoId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subtotal,
+          costoEnvio: 0,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        const mensaje = payload?.error ?? response.statusText;
+        console.error("[pedidos] no se pudo actualizar el pedido:", mensaje);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("[pedidos] error al actualizar el pedido", error);
+      return false;
+    }
+  }, []);
+
+  const eliminarPedido = React.useCallback(async (pedidoId: number) => {
+    try {
+      const response = await fetch(`/api/pedidos/${pedidoId}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) {
+        const mensaje = payload?.error ?? response.statusText;
+        console.error("[pedidos] no se pudo eliminar el pedido:", mensaje);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("[pedidos] error al eliminar el pedido", error);
+      return false;
+    }
+  }, []);
+
+  const registrarDetallePedido = React.useCallback(
+    async (pedidoId: number, producto: Producto, cantidad: number) => {
+      try {
+        const response = await fetch("/api/detalle_pedido", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            idPedido: pedidoId,
+            idProducto: producto.id,
+            cantidad,
+            precioUnitario: producto.precio,
+          }),
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok) {
+          const mensaje = payload?.error ?? response.statusText;
+          console.error("[detalle_pedido] no se pudo registrar el producto:", mensaje);
+          return null;
+        }
+        return payload.data ?? null;
+      } catch (error) {
+        console.error("[detalle_pedido] error al registrar el producto", error);
+        return null;
+      }
+    },
+    []
+  );
+
   const actualizarDetallePedido = React.useCallback(
     async (detalleId: number, cantidad: number, precio: number) => {
       try {
-        const response = await fetch(`/api/Detallepedido/${detalleId}`, {
+        const response = await fetch(`/api/detalle_pedido/${detalleId}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             cantidad,
-            precioProducto: precio,
+            precioUnitario: precio,
           }),
         });
         const payload = await response.json().catch(() => null);
         if (!response.ok || !payload?.ok) {
           const mensaje = payload?.error ?? response.statusText;
-          console.error("[Detallepedido] no se pudo actualizar:", mensaje);
+          console.error("[detalle_pedido] no se pudo actualizar:", mensaje);
           return false;
         }
         return true;
       } catch (error) {
-        console.error("[Detallepedido] error al actualizar el producto", error);
+        console.error("[detalle_pedido] error al actualizar el producto", error);
         return false;
       }
     },
@@ -289,18 +360,18 @@ export default function Page() {
 
   const eliminarDetallePedido = React.useCallback(async (detalleId: number) => {
     try {
-      const response = await fetch(`/api/Detallepedido/${detalleId}`, {
+      const response = await fetch(`/api/detalle_pedido/${detalleId}`, {
         method: "DELETE",
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.ok) {
         const mensaje = payload?.error ?? response.statusText;
-        console.error("[Detallepedido] no se pudo eliminar:", mensaje);
+        console.error("[detalle_pedido] no se pudo eliminar:", mensaje);
         return false;
       }
       return true;
     } catch (error) {
-      console.error("[Detallepedido] error al eliminar el producto", error);
+      console.error("[detalle_pedido] error al eliminar el producto", error);
       return false;
     }
   }, []);
@@ -362,7 +433,7 @@ export default function Page() {
     if (existente) {
       const nuevaCantidad = existente.cantidad + cantidadAgregada;
       if (!existente.detalleId) {
-        console.warn("[Detallepedido] no se encontro detalleId para actualizar el producto");
+        console.warn("[detalle_pedido] no se encontro detalleId para actualizar el producto");
         return false;
       }
       const actualizado = await actualizarDetallePedido(existente.detalleId, nuevaCantidad, producto.precio);
@@ -372,32 +443,70 @@ export default function Page() {
         await actualizarDetallePedido(existente.detalleId, existente.cantidad, producto.precio);
         return false;
       }
-      setCarrito((prev) =>
-        prev.map((p) => (p.id === producto.id ? { ...p, cantidad: nuevaCantidad } : p))
+      const carritoActualizado = carrito.map((p) =>
+        p.id === producto.id ? { ...p, cantidad: nuevaCantidad } : p
       );
+      const subtotalActualizado = carritoActualizado.reduce(
+        (acc, item) => acc + item.precio * item.cantidad,
+        0
+      );
+      const pedidoActualizado = await actualizarPedido(existente.pedidoId, subtotalActualizado);
+      if (!pedidoActualizado) {
+        await ajustarStockProducto(producto.id, cantidadAgregada, "incrementar");
+        await actualizarDetallePedido(existente.detalleId, existente.cantidad, producto.precio);
+        return false;
+      }
+      setCarrito(carritoActualizado);
       agregado = true;
     } else {
-      const detalle = await registrarDetallePedido(producto, cantidadAgregada);
-      if (!detalle?.id) {
+      let pedidoId = pedidoActivoId;
+      if (!pedidoId) {
+        const pedido = await crearPedido(cantidadAgregada * producto.precio);
+        const nuevoPedidoId = Number(pedido?.idPedido);
+        if (!Number.isInteger(nuevoPedidoId) || nuevoPedidoId <= 0) {
+          return false;
+        }
+        pedidoId = nuevoPedidoId;
+        setPedidoActivoId(nuevoPedidoId);
+      }
+
+      const detalle = await registrarDetallePedido(pedidoId, producto, cantidadAgregada);
+      const detalleId = Number(detalle?.idDetallePedido);
+      if (!Number.isInteger(detalleId) || detalleId <= 0) {
         return false;
       }
       const stockAj = await ajustarStockProducto(producto.id, cantidadAgregada, "disminuir");
       if (stockAj === null) {
-        await eliminarDetallePedido(Number(detalle.id));
+        await eliminarDetallePedido(detalleId);
         return false;
       }
-      const detalleId = Number(detalle.id);
-      setCarrito((prev) => [
-        ...prev,
+      const carritoActualizado = [
+        ...carrito,
         {
           detalleId,
+          pedidoId,
           id: producto.id,
           nombre: producto.nombre,
           precio: producto.precio,
           imagen: producto.imagen,
           cantidad: cantidadAgregada,
         },
-      ]);
+      ];
+      const subtotalActualizado = carritoActualizado.reduce(
+        (acc, item) => acc + item.precio * item.cantidad,
+        0
+      );
+      const pedidoActualizado = await actualizarPedido(pedidoId, subtotalActualizado);
+      if (!pedidoActualizado) {
+        await ajustarStockProducto(producto.id, cantidadAgregada, "incrementar");
+        await eliminarDetallePedido(detalleId);
+        if (carrito.length === 0) {
+          await eliminarPedido(pedidoId);
+          setPedidoActivoId(null);
+        }
+        return false;
+      }
+      setCarrito(carritoActualizado);
       agregado = true;
     }
 
@@ -425,11 +534,32 @@ export default function Page() {
       }
     }
 
-    setCarrito((prev) => prev.filter((p) => p.id !== id));
+    const carritoActualizado = carrito.filter((p) => p.id !== id);
+    if (carritoActualizado.length === 0) {
+      const pedidoEliminado = await eliminarPedido(item.pedidoId);
+      if (!pedidoEliminado) {
+        await ajustarStockProducto(id, item.cantidad, "disminuir");
+        return;
+      }
+      setPedidoActivoId(null);
+    } else {
+      const subtotalActualizado = carritoActualizado.reduce(
+        (acc, productoCarrito) => acc + productoCarrito.precio * productoCarrito.cantidad,
+        0
+      );
+      const pedidoActualizado = await actualizarPedido(item.pedidoId, subtotalActualizado);
+      if (!pedidoActualizado) {
+        await ajustarStockProducto(id, item.cantidad, "disminuir");
+        return;
+      }
+    }
+
+    setCarrito(carritoActualizado);
   };
 
   const vaciarCarrito = async () => {
     const pendientes: ItemCarrito[] = [];
+    const pedidoId = carrito[0]?.pedidoId ?? pedidoActivoId;
     for (const item of carrito) {
       const stockAj = await ajustarStockProducto(item.id, item.cantidad, "incrementar");
       if (stockAj === null) {
@@ -448,6 +578,16 @@ export default function Page() {
     setCarrito(pendientes);
     if (pendientes.length === 0) {
       setCantidadesSeleccionadas({});
+      if (pedidoId) {
+        await eliminarPedido(pedidoId);
+      }
+      setPedidoActivoId(null);
+    } else if (pedidoId) {
+      const subtotalPendiente = pendientes.reduce(
+        (acc, item) => acc + item.precio * item.cantidad,
+        0
+      );
+      await actualizarPedido(pedidoId, subtotalPendiente);
     }
   };
 
@@ -485,11 +625,8 @@ export default function Page() {
         <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-200 px-5 py-8 sm:px-8">
             <h1 className="mt-3 text-center text-3xl font-extrabold italic tracking-tight text-slate-900 sm:text-4xl lg:text-5xl">
-              Productos listos para cada ocasión
+              Catálogo de productos 
             </h1>
-            <p className="mx-auto mt-4 max-w-3xl text-center text-base leading-7 text-slate-600 sm:text-lg">
-              Explora nuestro inventario
-            </p>
           </div>
 
       {/* BÚSQUEDA */}
