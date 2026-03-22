@@ -37,7 +37,6 @@ type ItemCarrito = {
 type UsuarioActivo = {
   id: number;
   nombre: string;
-  activo?: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat("es-CO");
@@ -71,6 +70,7 @@ export default function Page() {
     Record<number, number | null>
   >({});
   const [usuarioActivo, setUsuarioActivo] = React.useState<UsuarioActivo | null>(null);
+  const [sesionCargada, setSesionCargada] = React.useState(false);
   const actualizarStockEnEstado = React.useCallback((productoId: number, nuevoStock: number) => {
     setProductos((prev) =>
       prev.map((producto) => (producto.id === productoId ? { ...producto, stock: nuevoStock } : producto))
@@ -125,19 +125,32 @@ export default function Page() {
     let cancelado = false;
     (async () => {
       try {
-        const res = await fetch("/api/usuarios", { cache: "no-store" });
+        const res = await fetch("/api/usuarioEstado", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        if (!json?.ok) throw new Error(json?.error ?? "Respuesta invalida");
-        const usuarios: UsuarioActivo[] = Array.isArray(json.data) ? json.data : [];
-        const activo = usuarios.find((u) => u?.activo === true);
         if (!cancelado) {
-          setUsuarioActivo(activo ?? null);
+          if (!json?.ok) {
+            setUsuarioActivo(null);
+            return;
+          }
+          const usuario = json.user;
+          if (usuario?.idusuario) {
+            setUsuarioActivo({
+              id: Number(usuario.idusuario),
+              nombre: String(usuario.nombre ?? usuario.nombreusuario ?? ""),
+            });
+          } else {
+            setUsuarioActivo(null);
+          }
         }
       } catch (e) {
         if (!cancelado) {
-          console.error("[Usuarios] no se pudo determinar el usuario activo", e);
+          console.error("[Usuarios] no se pudo determinar la sesion activa", e);
           setUsuarioActivo(null);
+        }
+      } finally {
+        if (!cancelado) {
+          setSesionCargada(true);
         }
       }
     })();
@@ -331,6 +344,10 @@ export default function Page() {
 
   const agregarAlCarrito = async (producto: Producto, cantidad = 1): Promise<boolean> => {
     setMensajeCarrito(null);
+    if (!usuarioActivo) {
+      setMensajeCarrito("Necesitas iniciar sesión para continuar con la compra y añadir productos al carrito.");
+      return false;
+    }
     const cantidadAgregada = Math.max(1, Number(cantidad) || 1);
     const stockDisponible = productos.find((p) => p.id === producto.id)?.stock ?? producto.stock;
     if (cantidadAgregada > stockDisponible) {
@@ -438,6 +455,10 @@ export default function Page() {
     (acc, item) => acc + item.precio * item.cantidad,
     0
   );
+  const puedeAgregarAlCarrito = sesionCargada && !!usuarioActivo;
+  const mensajeSesion = sesionCargada && !usuarioActivo
+    ? "Por favor inicia sesión para poder agregar productos a tu carrito."
+    : null;
 
   // =========================================================
   // UI
@@ -529,6 +550,14 @@ export default function Page() {
       </div>
 
       {/* MENSAJES */}
+      {mensajeSesion && (
+        <div className="px-5 pb-6 sm:px-8">
+          <div className="rounded-2xl px-5 py-4 text-right text-amber-700">
+            {mensajeSesion}
+          </div>
+        </div>
+      )}
+
       {cargando && (
         <div className="flex min-h-[240px] items-center justify-center px-5 text-xl text-sky-600 sm:px-8">
           <FaSpinner className="animate-spin mr-2" /> Cargando productos...
@@ -578,12 +607,12 @@ export default function Page() {
 
                 <button
                   onClick={() => {
-                    if (!sinStock) {
+                    if (!sinStock && puedeAgregarAlCarrito) {
                       void agregarAlCarrito(producto, cantidadActual || 1);
                     }
                   }}
-                  disabled={sinStock}
-                  className={`absolute right-4 top-4 rounded-full p-3 shadow-sm transition ${sinStock ? "cursor-not-allowed bg-white/20 text-white/70" : "bg-sky-400 text-slate-950 hover:bg-sky-300"}`}
+                  disabled={sinStock || !puedeAgregarAlCarrito}
+                  className={`absolute right-4 top-4 rounded-full p-3 shadow-sm transition ${sinStock || !puedeAgregarAlCarrito ? "cursor-not-allowed bg-white/20 text-white/70" : "bg-sky-400 text-slate-950 hover:bg-sky-300"}`}
                 >
                   <FaShoppingCart />
                 </button>
@@ -641,8 +670,8 @@ export default function Page() {
                           [producto.id]: limite,
                         }));
                       }}
-                      disabled={sinStock}
-                      className={`mt-2 w-full rounded-xl border border-white/10 px-3 py-2 text-left text-sm text-white shadow-sm outline-none focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/30 ${sinStock ? "cursor-not-allowed bg-white/5" : "bg-white/10"}`}
+                      disabled={sinStock || !puedeAgregarAlCarrito}
+                      className={`mt-2 w-full rounded-xl border border-white/10 px-3 py-2 text-left text-sm text-white shadow-sm outline-none focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/30 ${sinStock || !puedeAgregarAlCarrito ? "cursor-not-allowed bg-white/5" : "bg-white/10"}`}
                     />
                   </label>
                   {!sinStock && (cantidadSeleccionada ?? 0) > stockDisponible && (
@@ -756,7 +785,7 @@ export default function Page() {
                     setModalProducto(null);
                   }
                 }}
-                disabled={modalProducto.stock <= 0}
+                disabled={modalProducto.stock <= 0 || !puedeAgregarAlCarrito}
                 className="mt-6 w-full rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 Agregar al carrito
