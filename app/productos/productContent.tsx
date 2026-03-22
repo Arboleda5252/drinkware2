@@ -4,14 +4,10 @@ import * as React from "react";
 import {
   FaSpinner,
   FaClipboardCheck,
-  FaBan,
   FaShoppingCart,
   FaTrash,
-  FaMinus,
-  FaPlus,
   FaTimes,
 } from "react-icons/fa";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 type Producto = {
@@ -38,9 +34,15 @@ type ItemCarrito = {
   cantidad: number;
 };
 
-export default function Page() {
-  const router = useRouter();
+type UsuarioActivo = {
+  id: number;
+  nombre: string;
+  activo?: boolean;
+};
 
+const currencyFormatter = new Intl.NumberFormat("es-CO");
+
+export default function Page() {
   // ------------------------
   // ESTADOS
   // ------------------------
@@ -68,7 +70,7 @@ export default function Page() {
   const [cantidadesSeleccionadas, setCantidadesSeleccionadas] = React.useState<
     Record<number, number | null>
   >({});
-  const [usuarioActivo, setUsuarioActivo] = React.useState<{ id: number; nombre: string } | null>(null);
+  const [usuarioActivo, setUsuarioActivo] = React.useState<UsuarioActivo | null>(null);
   const actualizarStockEnEstado = React.useCallback((productoId: number, nuevoStock: number) => {
     setProductos((prev) =>
       prev.map((producto) => (producto.id === productoId ? { ...producto, stock: nuevoStock } : producto))
@@ -102,8 +104,10 @@ export default function Page() {
 
           setProductos(disponibles);
         }
-      } catch (e: any) {
-        if (!cancelado) setError(e?.message ?? "Error al cargar productos");
+      } catch (e: unknown) {
+        if (!cancelado) {
+          setError(e instanceof Error ? e.message : "Error al cargar productos");
+        }
       } finally {
         if (!cancelado) setCargando(false);
       }
@@ -114,6 +118,10 @@ export default function Page() {
   }, []);
 
   React.useEffect(() => {
+    setPagina(1);
+  }, [busqueda, categoriaFiltro, precioMin, precioMax, orden]);
+
+  React.useEffect(() => {
     let cancelado = false;
     (async () => {
       try {
@@ -121,8 +129,8 @@ export default function Page() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!json?.ok) throw new Error(json?.error ?? "Respuesta invalida");
-        const usuarios = Array.isArray(json.data) ? json.data : [];
-        const activo = usuarios.find((u: any) => u?.activo === true);
+        const usuarios: UsuarioActivo[] = Array.isArray(json.data) ? json.data : [];
+        const activo = usuarios.find((u) => u?.activo === true);
         if (!cancelado) {
           setUsuarioActivo(activo ?? null);
         }
@@ -383,10 +391,6 @@ export default function Page() {
     return agregado;
   };
 
-  const aumentar = (_id: number) => {};
-
-  const disminuir = (_id: number) => {};
-
   const eliminar = async (id: number) => {
     const item = carrito.find((p) => p.id === id);
     if (!item) return;
@@ -440,37 +444,48 @@ export default function Page() {
   // =========================================================
 
   return (
-    <main className="min-h-screen bg-gray-100 py-10 px-4">
+    <main className="bg-black py-3 text-gray-800 sm:py-10 lg:py-12">
       {/* BOTÓN DEL CARRITO */}
       <div className="fixed bottom-6 right-6 z-50">
         <button
           onClick={() => setDrawerAbierto(true)}
-          className="bg-black text-white p-4 rounded-full shadow-lg hover:bg-gray-800 flex items-center gap-2 text-lg"
+          className="flex items-center gap-2 rounded-full bg-slate-900 px-5 py-4 text-lg text-white shadow-lg transition hover:bg-sky-600"
         >
           <FaShoppingCart />
           <span>{carrito.length}</span>
         </button>
       </div>
 
-      <h1 className="text-5xl font-bold text-center text-indigo-700 mb-8">
-        Catálogo de Productos
-      </h1>
+      <section className="relative overflow-hidden rounded-b-[2.5rem] bg-[#0b1220] shadow-2xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.06),transparent_32%)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95" />
+
+        <div className="relative z-10 mx-auto max-w-7xl px-1 py-6 sm:px-6 sm:py-10 lg:px-8">
+        <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-200 px-5 py-8 sm:px-8">
+            <h1 className="mt-3 text-center text-3xl font-extrabold italic tracking-tight text-slate-900 sm:text-4xl lg:text-5xl">
+              Productos listos para cada ocasión
+            </h1>
+            <p className="mx-auto mt-4 max-w-3xl text-center text-base leading-7 text-slate-600 sm:text-lg">
+              Explora nuestro inventario
+            </p>
+          </div>
 
       {/* BÚSQUEDA */}
-      <div className="mx-auto mb-8 max-w-xl">
+      <div className="mx-auto mb-6 max-w-3xl px-5 pt-6 sm:px-8">
         <input
           type="search"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Busca por nombre..."
-          className="w-full rounded-lg border px-4 py-2 shadow-sm"
+          className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
         />
       </div>
 
       {/* FILTROS */}
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 mb-10">
+      <div className="mb-10 grid gap-3 px-5 sm:grid-cols-2 sm:px-8 md:grid-cols-4">
         <select
-          className="p-2 border rounded"
+          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
           value={categoriaFiltro}
           onChange={(e) => setCategoriaFiltro(e.target.value)}
         >
@@ -486,7 +501,7 @@ export default function Page() {
           type="number"
           min="0"
           placeholder="Precio minimo"
-          className="p-2 border rounded"
+          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
           value={precioMin}
           onChange={(e) => setPrecioMin(e.target.value)}
         />
@@ -495,13 +510,13 @@ export default function Page() {
           type="number"
           min="0"
           placeholder="Precio maximo"
-          className="p-2 border rounded"
+          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
           value={precioMax}
           onChange={(e) => setPrecioMax(e.target.value)}
         />
 
         <select
-          className="p-2 border rounded"
+          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
           value={orden}
           onChange={(e) => setOrden(e.target.value)}
         >
@@ -515,21 +530,27 @@ export default function Page() {
 
       {/* MENSAJES */}
       {cargando && (
-        <div className="flex justify-center items-center text-purple-600 text-xl">
+        <div className="flex min-h-[240px] items-center justify-center px-5 text-xl text-sky-600 sm:px-8">
           <FaSpinner className="animate-spin mr-2" /> Cargando productos...
         </div>
       )}
 
-      {error && <div className="text-center text-red-600">{error}</div>}
+      {error && (
+        <div className="px-5 sm:px-8">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-center text-red-600">
+            {error}
+          </div>
+        </div>
+      )}
 
       {!cargando && !error && productosFiltrados.length === 0 && (
-        <div className="text-center text-gray-600 text-xl mt-10 border p-6 rounded-lg bg-white">
+        <div className="mx-5 mt-10 rounded-2xl border border-gray-200 bg-slate-50 p-10 text-center text-slate-600 sm:mx-8">
           No se encontraron productos.
         </div>
       )}
 
       {/* GRID DE PRODUCTOS (10 por página) */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-6 px-5 sm:grid-cols-2 sm:px-8 lg:grid-cols-3 xl:grid-cols-4">
         {productosPagina.map((producto) => {
           const stockDisponible = producto.stock;
           const sinStock = stockDisponible <= 0;
@@ -541,9 +562,12 @@ export default function Page() {
           return (
             <div
               key={producto.id}
-              className="bg-white rounded-xl shadow-md overflow-hidden text-center flex flex-col h-full"
+              className="flex h-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-950 shadow-[0_20px_45px_rgba(2,6,23,0.35)] transition hover:-translate-y-1 hover:border-sky-300/30 hover:shadow-[0_26px_60px_rgba(2,6,23,0.5)]"
             >
-              <div className="relative bg-gray-50 h-64 flex items-center justify-center">
+              <div className="relative flex h-64 items-center justify-center border-b border-white/10 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800">
+                <span className="absolute left-4 top-4 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-100 shadow-sm backdrop-blur-md">
+                  {producto.categoria || "Sin categoría"}
+                </span>
                 <Image
                   src={producto.imagen || "/no-image.png"}
                   alt={producto.nombre}
@@ -559,40 +583,40 @@ export default function Page() {
                     }
                   }}
                   disabled={sinStock}
-                  className={`absolute top-2 right-2 p-2 rounded-full ${sinStock ? "bg-gray-400 text-white cursor-not-allowed" : "bg-black text-white"}`}
+                  className={`absolute right-4 top-4 rounded-full p-3 shadow-sm transition ${sinStock ? "cursor-not-allowed bg-white/20 text-white/70" : "bg-sky-400 text-slate-950 hover:bg-sky-300"}`}
                 >
                   <FaShoppingCart />
                 </button>
               </div>
 
-              <div className="p-4 flex flex-col flex-1 gap-3 text-left">
-                <div className="flex flex-col gap-2">
-                  <h2 className="text-xl font-semibold text-gray-800 text-center min-h-[3.5rem] flex items-center justify-center">
+              <div className="flex flex-1 flex-col p-5 text-center">
+                <div className="flex flex-col items-center gap-3">
+                  <h2 className="min-h-[4.5rem] max-w-[14rem] text-center text-xl font-semibold leading-snug text-white">
                     {producto.nombre}
                   </h2>
 
-                  <div className="text-center space-y-1 min-h-[4.5rem] flex flex-col justify-center">
-                    <p className="text-lg font-semibold text-slate-700">
-                      Precio unitario: ${producto.precio.toLocaleString("es-CO")}
+                  <div className="flex min-h-[5.5rem] w-full flex-col items-center justify-center space-y-2">
+                    <p className="text-2xl font-bold tracking-tight text-white">
+                      ${currencyFormatter.format(producto.precio)}
                     </p>
                     {sinStock ? (
-                      <p className="text-sm font-semibold text-red-600">
+                      <p className="text-sm text-center text-red-300">
                         Este producto no está disponible en este momento.
                       </p>
                     ) : (
-                      <p className="text-sm text-green-800">
-                        Tenemos {stockDisponible} unidades listas para que lo compres.
+                      <p className="text-sm text-center text-emerald-300">
+                        Tenemos {stockDisponible} unidades listas.
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="mt-auto flex flex-col gap-2">
-                  <label className="text-sm font-medium text-gray-600">
-                    Cantidad
+                <div className="mt-auto flex flex-col gap-3">
+                  <label className="flex flex-col text-sm font-medium text-slate-300">
                     <input
                       type="number"
                       min="1"
+                      placeholder="Cantidad"
                       max={Math.max(stockDisponible, 1)}
                       value={
                         sinStock ? "" : cantidadSeleccionada?.toString() ?? ""
@@ -618,20 +642,23 @@ export default function Page() {
                         }));
                       }}
                       disabled={sinStock}
-                      className={`mt-1 w-full rounded border px-3 py-1 ${sinStock ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                      className={`mt-2 w-full rounded-xl border border-white/10 px-3 py-2 text-left text-sm text-white shadow-sm outline-none focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/30 ${sinStock ? "cursor-not-allowed bg-white/5" : "bg-white/10"}`}
                     />
                   </label>
                   {!sinStock && (cantidadSeleccionada ?? 0) > stockDisponible && (
-                    <p className="text-xs text-red-600">
+                    <p className="text-center text-xs text-red-300">
                       La cantidad no puede superar el stock disponible ({stockDisponible}).
                     </p>
                   )}
-                  <p className="text-sm text-gray-700">
-                    Subtotal: ${subtotalActual.toLocaleString("es-CO")}
-                  </p>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
+                    <span className="text-slate-300">Subtotal</span>
+                    <span className="font-semibold text-white">
+                      ${currencyFormatter.format(subtotalActual)}
+                    </span>
+                  </div>
                   <button
                     onClick={() => setModalProducto(producto)}
-                    className="w-full bg-black text-white py-2 rounded transition-colors hover:bg-sky-500"
+                    className="w-full rounded-xl bg-sky-400 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-300"
                   >
                     <FaClipboardCheck className="inline mr-2" /> Ver Detalles
                   </button>
@@ -643,11 +670,11 @@ export default function Page() {
       </div>
 
       {/* PAGINACIÓN */}
-      <div className="flex justify-center gap-3 mt-10">
+      <div className="mt-10 flex flex-wrap justify-center gap-3 px-5 pb-8 sm:px-8">
         <button
           disabled={pagina === 1}
           onClick={() => setPagina((p) => p - 1)}
-          className="px-4 py-2 bg-gray-300 rounded disabled:opacity-40"
+          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Anterior
         </button>
@@ -656,10 +683,10 @@ export default function Page() {
           <button
             key={i}
             onClick={() => setPagina(i + 1)}
-            className={`px-4 py-2 rounded ${
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
               pagina === i + 1
-                ? "bg-black text-white"
-                : "bg-gray-200 hover:bg-gray-300"
+                ? "bg-slate-900 text-white"
+                : "border border-gray-200 bg-white text-slate-700 shadow-sm hover:border-sky-300 hover:text-sky-600"
             }`}
           >
             {i + 1}
@@ -669,41 +696,44 @@ export default function Page() {
         <button
           disabled={pagina === totalPaginas}
           onClick={() => setPagina((p) => p + 1)}
-          className="px-4 py-2 bg-gray-300 rounded disabled:opacity-40"
+          className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-sky-300 hover:text-sky-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Siguiente
         </button>
       </div>
+        </div>
+        </div>
+      </section>
 
       {/* ========================================================= */}
       {/* MODAL DETALLES */}
       {/* ========================================================= */}
       {modalProducto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-          <div className="bg-white w-[90%] md:w-[600px] rounded-xl shadow-xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
+          <div className="relative w-full max-w-2xl rounded-3xl border border-gray-200 bg-white p-6 shadow-xl">
             {/* Cerrar */}
             <button
               onClick={() => setModalProducto(null)}
-              className="absolute top-4 right-4 text-gray-700 hover:text-black"
+              className="absolute right-5 top-5 text-slate-500 transition hover:text-slate-900"
             >
               <FaTimes size={22} />
             </button>
 
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center text-center">
               <Image
                 src={modalProducto.imagen || "/no-image.png"}
                 width={300}
                 height={300}
                 alt={modalProducto.nombre}
-                className="rounded-lg mb-4"
+                className="mb-6 rounded-2xl bg-slate-50 object-contain"
               />
 
-              <h2 className="text-3xl font-bold text-indigo-600 mb-3">
+              <h2 className="mb-3 text-3xl font-bold tracking-tight text-slate-900">
                 {modalProducto.nombre}
               </h2>
 
-              <p className="text-lg text-gray-700 mb-2">
-                <strong>Precio:</strong> ${modalProducto.precio.toLocaleString("es-CO")}
+              <p className="mb-3 text-3xl font-bold tracking-tight text-slate-900">
+                ${currencyFormatter.format(modalProducto.precio)}
               </p>
 
               <p className="text-lg text-gray-700 mb-2">
@@ -726,7 +756,8 @@ export default function Page() {
                     setModalProducto(null);
                   }
                 }}
-                className="mt-4 bg-black text-white px-6 py-2 rounded-lg"
+                disabled={modalProducto.stock <= 0}
+                className="mt-6 w-full rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-gray-300"
               >
                 Agregar al carrito
               </button>
@@ -740,27 +771,35 @@ export default function Page() {
       {/* ========================================================= */}
       {drawerAbierto && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-40 z-40"
+          className="fixed inset-0 z-40 bg-slate-950/45"
           onClick={() => setDrawerAbierto(false)}
         ></div>
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-80 bg-white shadow-xl p-6 z-50 transform transition-transform duration-300 ${
+        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-gray-200 bg-white p-6 shadow-xl transition-transform duration-300 ${
           drawerAbierto ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-          <FaShoppingCart /> Carrito
-        </h2>
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
+            <FaShoppingCart /> Carrito
+          </h2>
+          <button
+            onClick={() => setDrawerAbierto(false)}
+            className="text-slate-500 transition hover:text-slate-900"
+          >
+            <FaTimes />
+          </button>
+        </div>
 
         {carrito.length === 0 ? (
-          <div className="text-center mt-10 space-y-2">
-            <p className="text-gray-500">
+          <div className="mt-10 rounded-2xl border border-gray-200 bg-slate-50 p-8 text-center">
+            <p className="text-slate-500">
               Tu carrito está vacío
             </p>
             {mensajeCarrito && (
-              <p className="text-sm text-red-600 px-3">
+              <p className="px-3 text-sm text-red-600">
                 {mensajeCarrito}
               </p>
             )}
@@ -772,35 +811,35 @@ export default function Page() {
                 {mensajeCarrito}
               </div>
             )}
-            <ul className="max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+            <ul className="max-h-[60vh] space-y-4 overflow-y-auto pr-2">
               {carrito.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-center gap-3 border-b pb-3"
+                  className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-slate-50 p-3"
                 >
                   <Image
                     src={item.imagen || "/no-image.png"}
                     alt={item.nombre}
                     width={60}
                     height={60}
-                    className="rounded"
+                    className="rounded-xl bg-white object-contain"
                   />
 
                   <div className="flex-1">
-                    <p className="font-semibold">{item.nombre}</p>
+                    <p className="font-semibold text-slate-900">{item.nombre}</p>
                     <p className="text-sm text-gray-600">
-                      ${item.precio.toLocaleString("es-CO")}
+                      ${currencyFormatter.format(item.precio)}
                     </p>
 
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="px-3 py-1 rounded bg-gray-100">
+                      <span className="rounded-full bg-white px-3 py-1 text-sm text-slate-700 ring-1 ring-gray-200">
                         Cantidad: {item.cantidad}
                       </span>
                     </div>
                   </div>
 
                   <button
-                    className="text-red-600"
+                    className="text-red-600 transition hover:text-red-700"
                     onClick={() => void eliminar(item.id)}
                   >
                     <FaTrash />
@@ -810,13 +849,13 @@ export default function Page() {
             </ul>
 
             <div className="mt-6">
-              <p className="text-xl font-bold">
-                Total: ${total.toLocaleString("es-CO")}
+              <p className="text-xl font-bold tracking-tight text-slate-900">
+                Total: ${currencyFormatter.format(total)}
               </p>
 
               <button
                 onClick={() => void vaciarCarrito()}
-                className="mt-4 w-full bg-red-600 text-white py-2 rounded"
+                className="mt-4 w-full rounded-xl bg-red-600 py-3 text-sm font-semibold text-white transition hover:bg-red-700"
               >
                 Vaciar Carrito
               </button>
