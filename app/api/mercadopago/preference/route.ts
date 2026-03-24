@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { preferenceClient } from "@/app/libs/mercadopago";
+import { getPreferenceClient } from "@/app/libs/mercadopago";
 import type { Items } from "mercadopago/dist/clients/commonTypes";
 import type { PreferenceRequest } from "mercadopago/dist/clients/preference/commonTypes";
 import { sql } from "@/app/Datalibs/database";
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
       preferenceBody.auto_return = "approved";
     }
 
-    const response = await preferenceClient.create({
+    const response = await getPreferenceClient().create({
       body: preferenceBody,
     });
 
