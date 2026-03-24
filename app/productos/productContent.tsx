@@ -9,6 +9,7 @@ import {
   FaTimes,
 } from "react-icons/fa";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 type Producto = {
   id: number;
@@ -43,6 +44,8 @@ type UsuarioActivo = {
 const currencyFormatter = new Intl.NumberFormat("es-CO");
 
 export default function Page() {
+  const router = useRouter();
+
   // ------------------------
   // ESTADOS
   // ------------------------
@@ -1024,6 +1027,16 @@ export default function Page() {
                 className="mt-4 w-full rounded-xl bg-red-600 py-3 text-sm font-semibold text-white transition hover:bg-red-700"
               >
                 Vaciar Carrito
+              </button>
+
+              <button
+                onClick={() => {
+                  setDrawerAbierto(false);
+                  router.push("/user/usuario/compras");
+                }}
+                className="mt-3 w-full rounded-xl bg-slate-900 py-3 text-sm font-semibold text-white transition hover:bg-sky-600"
+              >
+                Finalizar compras
               </button>
             </div>
           </>

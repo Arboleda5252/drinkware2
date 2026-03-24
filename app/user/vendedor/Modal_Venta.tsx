@@ -11,12 +11,15 @@ type OrderSummaryProps = {
   cartItems: CartItem[];
   deliveryType: "Domicilio" | "Retiro_tienda";
   paymentType: string;
+  pickupDateTime: string;
+  pickupMinDateTime: string;
   totalAmount: number;
   registering: boolean;
   vendedorError: string;
   feedback: FeedbackState | null;
   onDeliveryTypeChange: (value: "Domicilio" | "Retiro_tienda") => void;
   onPaymentTypeChange: (value: string) => void;
+  onPickupDateTimeChange: (value: string) => void;
   onRegisterSale: () => void;
 };
 
@@ -25,12 +28,15 @@ export function OrderSummary({
   cartItems,
   deliveryType,
   paymentType,
+  pickupDateTime,
+  pickupMinDateTime,
   totalAmount,
   registering,
   vendedorError,
   feedback,
   onDeliveryTypeChange,
   onPaymentTypeChange,
+  onPickupDateTimeChange,
   onRegisterSale,
 }: OrderSummaryProps) {
   return (
@@ -114,19 +120,32 @@ export function OrderSummary({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="flex flex-col text-sm font-medium text-slate-600">
-                Domiciliario
-                <select
-                  defaultValue=""
-                  className="mt-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
-                >
-                  <option value="" disabled>
-                    Selecciona un domiciliario
-                  </option>
-                  <option value="dom-1">Domiciliario 1</option>
-                  <option value="dom-2">Domiciliario 2</option>
-                </select>
-              </label>
+              {deliveryType === "Domicilio" ? (
+                <label className="flex flex-col text-sm font-medium text-slate-600">
+                  Domiciliario
+                  <select
+                    defaultValue=""
+                    className="mt-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  >
+                    <option value="" disabled>
+                      Selecciona un domiciliario
+                    </option>
+                    <option value="dom-1">Domiciliario 1</option>
+                    <option value="dom-2">Domiciliario 2</option>
+                  </select>
+                </label>
+              ) : (
+                <label className="flex flex-col text-sm font-medium text-slate-600">
+                  Fecha y hora de retiro
+                  <input
+                    type="datetime-local"
+                    value={pickupDateTime}
+                    min={pickupMinDateTime}
+                    onChange={(event) => onPickupDateTimeChange(event.target.value)}
+                    className="mt-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  />
+                </label>
+              )}
 
               <label className="flex flex-col text-sm font-medium text-slate-600">
                 Tipo de pago

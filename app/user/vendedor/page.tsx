@@ -17,6 +17,7 @@ export default function Page() {
   const [customerAddress, setCustomerAddress] = useState("");
   const [deliveryType, setDeliveryType] = useState<"Domicilio" | "Retiro_tienda">("Domicilio");
   const [paymentType, setPaymentType] = useState("");
+  const [pickupDateTime, setPickupDateTime] = useState("");
   const [customerUserId, setCustomerUserId] = useState<number | null>(null);
   const [documentLookupLoading, setDocumentLookupLoading] = useState(false);
   const [documentLookupError, setDocumentLookupError] = useState("");
@@ -57,6 +58,14 @@ export default function Page() {
       return acc + (product.price ?? 0) * item.quantity;
     }, 0);
   }, [cartItems, inventorioProductos]);
+
+  const pickupMinDateTime = useMemo(() => {
+    const ahora = new Date();
+    ahora.setSeconds(0, 0);
+    const offset = ahora.getTimezoneOffset();
+    const local = new Date(ahora.getTime() - offset * 60_000);
+    return local.toISOString().slice(0, 16);
+  }, []);
 
   const detalleItems = useMemo(() => {
     return cartItems.map((item) => {
@@ -236,18 +245,47 @@ export default function Page() {
   }, []);
 
   const registrarVenta = async () => {
-    if (
+    const requiereDatosDomicilio = deliveryType === "Domicilio";
+    const faltanDatosBase =
       !customerName ||
       !customerPhone ||
       !customerCity ||
       !customerAddress ||
-      cartItems.length === 0
-    ) {
+      cartItems.length === 0;
+
+    if (faltanDatosBase && requiereDatosDomicilio) {
       setFeedback({
         type: "error",
         message: "Completa nombre, telefono, ciudad, direccion y agrega un producto.",
       });
       return;
+    }
+
+    if ((!customerName || !customerPhone || cartItems.length === 0) && !requiereDatosDomicilio) {
+      setFeedback({
+        type: "error",
+        message: "Completa nombre, telefono, define la fecha de retiro y agrega un producto.",
+      });
+      return;
+    }
+
+    if (deliveryType === "Retiro_tienda") {
+      if (!pickupDateTime) {
+        setFeedback({
+          type: "error",
+          message: "Debes definir la fecha y hora de retiro en tienda.",
+        });
+        return;
+      }
+
+      const retiroSeleccionado = new Date(pickupDateTime);
+      if (Number.isNaN(retiroSeleccionado.getTime()) || retiroSeleccionado < new Date()) {
+        setFeedback({
+          type: "error",
+          message: "La fecha y hora de retiro no puede ser anterior a la actual.",
+        });
+        return;
+      }
     }
 
     if (!vendedorId) {
@@ -371,13 +409,15 @@ export default function Page() {
 
       const entregaPayload: Record<string, unknown> = {
         idPedido: Number(pedidoId),
-        ciudad: customerCityValue,
-        direccionEntrega: customerAddressValue,
+        ciudad: deliveryType === "Domicilio" ? customerCityValue : null,
+        direccionEntrega: deliveryType === "Domicilio" ? customerAddressValue : null,
         telefonoContacto: customerPhoneValue,
         nombreRecibe: customerNameValue,
         costoEnvio: 0,
         estadoEntrega: "Pendiente",
         observacion: paymentTypeLabel,
+        fechaHoraRetiro:
+          deliveryType === "Retiro_tienda" ? new Date(pickupDateTime).toISOString() : null,
       };
 
       const entregaRes = await fetch("/api/entrega", {
@@ -398,6 +438,7 @@ export default function Page() {
       setCustomerDocument("");
       setCustomerAddress("");
       setPaymentType("");
+      setPickupDateTime("");
       setCustomerUserId(null);
       setDocumentLookupError("");
       setDocumentLookupMessage("");
@@ -651,6 +692,12 @@ export default function Page() {
     setStockError("");
   }, [seleccionarProducto, quantity, seleccionarProductoCart]);
 
+  useEffect(() => {
+    if (deliveryType === "Domicilio" && pickupDateTime) {
+      setPickupDateTime("");
+    }
+  }, [deliveryType, pickupDateTime]);
+
   return (
     <section className="w-full bg-slate-50 py-10">
       <div className="mx-auto flex max-w-5xl flex-col gap-8 rounded-2xl bg-white p-8 text-[15px] md:text-base shadow-lg">
@@ -720,12 +767,15 @@ export default function Page() {
           cartItems={cartItems}
           deliveryType={deliveryType}
           paymentType={paymentType}
+          pickupDateTime={pickupDateTime}
+          pickupMinDateTime={pickupMinDateTime}
           totalAmount={totalAmount}
           registering={registering}
           vendedorError={vendedorError}
           feedback={feedback}
           onDeliveryTypeChange={setDeliveryType}
           onPaymentTypeChange={setPaymentType}
+          onPickupDateTimeChange={setPickupDateTime}
           onRegisterSale={registrarVenta}
         />
       </div>

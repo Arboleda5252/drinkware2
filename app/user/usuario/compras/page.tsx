@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { FaPen, FaTrash } from "react-icons/fa";
 import MercadoPagoWalletButtonEnv from "@/app/ui/mercadopago-wallet-button-env";
 
@@ -114,6 +115,7 @@ const formatoCOP = new Intl.NumberFormat("es-CO", {
 const placeholderImagen = "/no-image.png";
 
 export default function Page() {
+  const router = useRouter();
   const [usuarioActivo, setUsuarioActivo] = useState<Usuario | null>(null);
   const [detalleUsuario, setDetalleUsuario] = useState<UsuarioDetalle | null>(null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
@@ -919,9 +921,17 @@ export default function Page() {
                 setModalPedidoAbierto(true);
               }}
               disabled={carrito.length === 0 || confirmandoPedido}
-              className="mt-6 w-full rounded-xl bg-blue-600 py-3 text-lg font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-6 w-full rounded-xl bg-blue-600 py-3 text-lg font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {confirmandoPedido ? "Guardando..." : "Seguir comprando"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/productos")}
+              className="mt-3 w-full rounded-xl bg-blue-600 py-3 text-lg font-semibold text-white transition hover:bg-blue-500"
+            >
+              Agregar mas productos
             </button>
           </div>
         </aside>
