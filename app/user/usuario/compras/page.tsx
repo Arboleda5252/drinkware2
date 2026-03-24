@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { FaPen, FaTrash } from "react-icons/fa";
+import MercadoPagoWalletButtonEnv from "@/app/ui/mercadopago-wallet-button-env";
 
 type Usuario = {
   id: number;
@@ -88,6 +89,22 @@ type Pago = {
   observacion: string | null;
 };
 
+type PreferenceResponseData = {
+  id: string | null;
+  preference_id: string | null;
+  init_point: string | null;
+  sandbox_init_point: string | null;
+  idPedidos: number[];
+};
+
+type PreferenceRequestItem = {
+  id: string;
+  title: string;
+  quantity: number;
+  currency_id: string;
+  unit_price: number;
+};
+
 const formatoCOP = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
@@ -121,6 +138,10 @@ export default function Page() {
   const [telefonoContacto, setTelefonoContacto] = useState("");
   const [direccionEntrega, setDireccionEntrega] = useState("");
   const [ciudadEntrega, setCiudadEntrega] = useState("");
+  const [preferenceId, setPreferenceId] = useState<string | null>(null);
+  const [preferencePedidosKey, setPreferencePedidosKey] = useState<string | null>(null);
+  const [preferenceIntentadaKey, setPreferenceIntentadaKey] = useState<string | null>(null);
+  const [generandoPreferencia, setGenerandoPreferencia] = useState(false);
 
   const fetchJson = useCallback(async <T,>(url: string, init?: RequestInit) => {
     const response = await fetch(url, {
@@ -407,6 +428,11 @@ export default function Page() {
     return { totalProductos, subtotal };
   }, [carrito]);
 
+  const idsPedidosCarrito = useMemo(
+    () => Array.from(new Set(carrito.map((item) => item.pedido.idPedido))).sort((a, b) => a - b),
+    [carrito]
+  );
+
   const estadoResumen = carrito.length === 0 && !cargando ? "Tu carrito esta vacio." : null;
 
   const guardarEntregaYContinuar = useCallback(async () => {
@@ -615,6 +641,129 @@ export default function Page() {
       setConfirmandoPago(false);
     }
   }, [actualizarPedido, carrito, confirmandoPago, fetchJson, metodoPagoSeleccionado, tipoEntrega]);
+
+  const prepararPagoOnline = useCallback(async () => {
+    if (
+      carrito.length === 0 ||
+      confirmandoPago ||
+      generandoPreferencia ||
+      idsPedidosCarrito.length === 0
+    ) {
+      return;
+    }
+
+    const currentKey = `${tipoEntrega}:${idsPedidosCarrito.join(",")}`;
+    if (preferenceId && preferencePedidosKey === currentKey) {
+      return;
+    }
+    if (preferenceIntentadaKey === currentKey) {
+      return;
+    }
+
+    const itemsPreferencia: PreferenceRequestItem[] = carrito.map((item) => ({
+      id: `${item.pedido.idPedido}-${item.detalle.idDetallePedido}`,
+      title: item.producto?.nombre ?? `Producto ${item.detalle.idProducto}`,
+      quantity: item.detalle.cantidad,
+      currency_id: "COP",
+      unit_price: item.detalle.precioUnitario,
+    }));
+
+    setAccionError(null);
+    setAccionExito(null);
+    setGenerandoPreferencia(true);
+    setPreferenceIntentadaKey(currentKey);
+
+    try {
+      const pagos = await fetchJson<Pago[]>("/api/pago");
+
+      await Promise.all(
+        idsPedidosCarrito.map(async (pedidoId) => {
+          const monto = carrito
+            .filter((item) => item.pedido.idPedido === pedidoId)
+            .reduce((acc, item) => acc + item.detalle.precioUnitario * item.detalle.cantidad, 0);
+
+          const payloadPago: Record<string, unknown> = {
+            idPedido: pedidoId,
+            metodoPago: "Pago_Online",
+            estadoPago: "Pendiente",
+            monto,
+            fechaPago: null,
+            observacion: "Pago online gestionado por Mercado Pago",
+          };
+
+          const pagoExistente = pagos.find((pago) => Number(pago.idPedido) === pedidoId);
+          if (pagoExistente) {
+            await fetchJson<Pago>(`/api/pago/${pagoExistente.idPago}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payloadPago),
+            });
+            return;
+          }
+
+          await fetchJson<Pago>("/api/pago", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payloadPago),
+          });
+        })
+      );
+
+      const preference = await fetchJson<PreferenceResponseData>("/api/mercadopago/preference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPedidos: idsPedidosCarrito,
+          items: itemsPreferencia,
+          external_reference: `pedido-${idsPedidosCarrito.join("-")}`,
+        }),
+      });
+
+      if (!preference.preference_id) {
+        throw new Error("Mercado Pago no devolvio un preference_id valido.");
+      }
+
+      setPreferenceId(preference.preference_id);
+      setPreferencePedidosKey(currentKey);
+    } catch (err) {
+      setPreferenceId(null);
+      setPreferencePedidosKey(null);
+      setAccionError(
+        err instanceof Error ? err.message : "No se pudo preparar el pago online."
+      );
+    } finally {
+      setGenerandoPreferencia(false);
+    }
+  }, [
+    carrito,
+    confirmandoPago,
+    fetchJson,
+    generandoPreferencia,
+    idsPedidosCarrito,
+    preferenceIntentadaKey,
+    preferenceId,
+    preferencePedidosKey,
+    tipoEntrega,
+  ]);
+
+  useEffect(() => {
+    if (!modalPagoAbierto) {
+      setPreferenceId(null);
+      setPreferencePedidosKey(null);
+      setPreferenceIntentadaKey(null);
+      setGenerandoPreferencia(false);
+      return;
+    }
+
+    if (metodoPagoSeleccionado !== "Pago_Online") {
+      setPreferenceId(null);
+      setPreferencePedidosKey(null);
+      setPreferenceIntentadaKey(null);
+      return;
+    }
+
+    void prepararPagoOnline();
+  }, [metodoPagoSeleccionado, modalPagoAbierto, prepararPagoOnline]);
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10">
@@ -1052,6 +1201,46 @@ export default function Page() {
               </div>
             </div>
 
+            {metodoPagoSeleccionado === "Pago_Online" && (
+              <div className="mt-5 rounded-xl bg-sky-50 p-4">
+                <p className="text-sm font-semibold text-sky-900">
+                  Pago online con Mercado Pago
+                </p>
+                <p className="mt-1 text-sm text-sky-700">
+                  Se generara una preferencia con los pedidos actuales y su valor total. Al
+                  completar el pago, Mercado Pago te redirigira segun el estado de la transaccion.
+                </p>
+
+                {generandoPreferencia ? (
+                  <div className="mt-4 rounded-xl border border-sky-200 bg-white p-4 text-sm text-sky-700">
+                    Generando boton de pago...
+                  </div>
+                ) : preferenceId ? (
+                  <div className="mt-4 rounded-xl border border-sky-200 bg-white p-4">
+                    <MercadoPagoWalletButtonEnv
+                      preferenceId={preferenceId ?? ""}
+                      title="Boton de pago"
+                      description="Haz clic en el boton para continuar con Mercado Pago."
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                    <p>Aun no se pudo generar la preferencia de pago.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreferenceIntentadaKey(null);
+                        void prepararPagoOnline();
+                      }}
+                      className="mt-3 rounded-lg border border-amber-300 px-3 py-2 font-semibold text-amber-700 hover:bg-amber-100"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
@@ -1060,13 +1249,15 @@ export default function Page() {
               >
                 Cerrar
               </button>
-              <button
-                type="button"
-                onClick={() => void confirmarPago()}
-                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
-              >
-                {confirmandoPago ? "Confirmando..." : "Confirmar"}
-              </button>
+              {metodoPagoSeleccionado !== "Pago_Online" && (
+                <button
+                  type="button"
+                  onClick={() => void confirmarPago()}
+                  className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+                >
+                  {confirmandoPago ? "Confirmando..." : "Confirmar"}
+                </button>
+              )}
             </div>
           </div>
         </div>
