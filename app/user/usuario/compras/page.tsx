@@ -2,14 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { FaShoppingCart, FaTrash } from "react-icons/fa";
-import { HiOutlineRefresh } from "react-icons/hi";
+import { FaPen, FaTrash } from "react-icons/fa";
 
 type Usuario = {
   id: number;
   nombre: string;
-  apellido: string;
-  activo: boolean;
+  apellido?: string;
 };
 
 type UsuarioDetalle = {
@@ -24,17 +22,25 @@ type UsuarioDetalle = {
 };
 
 type DetallePedido = {
-  id: number;
-  productoId: number;
+  idDetallePedido: number;
+  idPedido: number;
+  idProducto: number;
   cantidad: number;
-  precioProducto: number;
+  precioUnitario: number;
+  subtotal: number | null;
+};
+
+type Pedido = {
+  idPedido: number;
+  idCliente: number | null;
+  idVendedor: number | null;
+  fechaCreacion: string;
+  tipoEntrega: string | null;
+  estadoPedido: string | null;
+  observacion: string | null;
   subtotal: number;
-  idUsuario: number | null;
-  estado: string | null;
-  fechaPago: string | null;
-  nombreCliente: string | null;
-  direccionCliente: string | null;
-  telefonoCliente: string | null;
+  costoEnvio: number;
+  total: number;
 };
 
 type Producto = {
@@ -48,8 +54,38 @@ type Producto = {
 };
 
 type ItemCarrito = {
+  pedido: Pedido;
   detalle: DetallePedido;
   producto: Producto | null;
+};
+
+type Entrega = {
+  idEntrega: number;
+  idPedido: number;
+  idDomiciliario: number | null;
+  direccionEntrega: string | null;
+  ciudad: string | null;
+  telefonoContacto: string | null;
+  nombreRecibe: string | null;
+  costoEnvio: number;
+  estadoEntrega: string | null;
+  fechaProgramada: string | null;
+  fechaAsignacion: string | null;
+  fechaSalida: string | null;
+  fechaEntrega: string | null;
+  fechaHoraRetiro: string | null;
+  observacion: string | null;
+};
+
+type Pago = {
+  idPago: number;
+  idPedido: number;
+  metodoPago: string;
+  estadoPago: string;
+  monto: number;
+  fechaPago: string | null;
+  referenciaPago: string | null;
+  observacion: string | null;
 };
 
 const formatoCOP = new Intl.NumberFormat("es-CO", {
@@ -64,7 +100,7 @@ export default function Page() {
   const [usuarioActivo, setUsuarioActivo] = useState<Usuario | null>(null);
   const [detalleUsuario, setDetalleUsuario] = useState<UsuarioDetalle | null>(null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
-  const [pedidosUsuario, setPedidosUsuario] = useState<ItemCarrito[]>([]);
+  const [, setPedidosUsuario] = useState<ItemCarrito[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accionError, setAccionError] = useState<string | null>(null);
@@ -72,8 +108,19 @@ export default function Page() {
   const [eliminandoId, setEliminandoId] = useState<number | null>(null);
   const [vaciando, setVaciando] = useState(false);
   const [confirmandoPedido, setConfirmandoPedido] = useState(false);
+  const [confirmandoPago, setConfirmandoPago] = useState(false);
   const [modalPedidoAbierto, setModalPedidoAbierto] = useState(false);
-  const [medioPago, setMedioPago] = useState<"efectivo" | "tarjeta">("efectivo");
+  const [modalPagoAbierto, setModalPagoAbierto] = useState(false);
+  const [tipoEntrega, setTipoEntrega] = useState<"Domicilio" | "Retiro_tienda">("Domicilio");
+  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState<
+    "Pago_Online" | "Contraentrega" | "Efectivo"
+  >("Contraentrega");
+  const [fechaHoraRetiro, setFechaHoraRetiro] = useState("");
+  const [entregarOtraDireccion, setEntregarOtraDireccion] = useState(false);
+  const [nombreRecibe, setNombreRecibe] = useState("");
+  const [telefonoContacto, setTelefonoContacto] = useState("");
+  const [direccionEntrega, setDireccionEntrega] = useState("");
+  const [ciudadEntrega, setCiudadEntrega] = useState("");
 
   const fetchJson = useCallback(async <T,>(url: string, init?: RequestInit) => {
     const response = await fetch(url, {
@@ -89,6 +136,14 @@ export default function Page() {
     return payload.data as T;
   }, []);
 
+  const ahoraMinimaRetiro = useMemo(() => {
+    const ahora = new Date();
+    ahora.setSeconds(0, 0);
+    const offset = ahora.getTimezoneOffset();
+    const local = new Date(ahora.getTime() - offset * 60_000);
+    return local.toISOString().slice(0, 16);
+  }, []);
+
   const loadData = useCallback(async () => {
     setCargando(true);
     setError(null);
@@ -96,9 +151,12 @@ export default function Page() {
      setAccionExito(null);
      setModalPedidoAbierto(false);
     try {
-      const usuarios = await fetchJson<Usuario[]>("/api/usuarios");
-      const activo = usuarios.find((usuario) => usuario.activo);
-      if (!activo) {
+      const sesion = await fetch("/api/usuarioEstado", { cache: "no-store" });
+      const sesionJson: { ok?: boolean; user?: { idusuario?: number; nombre?: string; nombreusuario?: string } } | null =
+        await sesion.json().catch(() => null);
+      const activoId = Number(sesionJson?.user?.idusuario);
+
+      if (!sesion.ok || !sesionJson?.ok || !Number.isInteger(activoId) || activoId <= 0) {
         setUsuarioActivo(null);
         setDetalleUsuario(null);
         setPedidosUsuario([]);
@@ -106,25 +164,57 @@ export default function Page() {
         setError("No existe un usuario activo en este momento.");
         return;
       }
+
+      const activo: Usuario = {
+        id: activoId,
+        nombre: String(sesionJson.user?.nombre ?? sesionJson.user?.nombreusuario ?? ""),
+      };
+
       setUsuarioActivo(activo);
       try {
         const informacion = await fetchJson<UsuarioDetalle>(`/api/usuarios/${activo.id}`);
         setDetalleUsuario(informacion);
+        setUsuarioActivo({
+          id: informacion.id,
+          nombre: informacion.nombre,
+          apellido: informacion.apellido,
+        });
       } catch (infoError) {
         console.warn("[Carrito] no se obtuvo informacion detallada del usuario", infoError);
         setDetalleUsuario(null);
       }
 
-      const detalles = await fetchJson<DetallePedido[]>("/api/Detallepedido");
-      const propios = detalles.filter((detalle) => Number(detalle.idUsuario) === activo.id);
+      const [pedidos, detalles] = await Promise.all([
+        fetchJson<Pedido[]>("/api/pedidos"),
+        fetchJson<DetallePedido[]>("/api/detalle_pedido"),
+      ]);
 
-      if (propios.length === 0) {
+      const pedidosPropios = pedidos.filter(
+        (pedido) =>
+          Number(pedido.idCliente) === activo.id &&
+          (pedido.tipoEntrega ?? "").toLowerCase() === "pendiente" &&
+          (pedido.estadoPedido ?? "Pendiente").toLowerCase() === "pendiente"
+      );
+
+      if (pedidosPropios.length === 0) {
         setPedidosUsuario([]);
         setCarrito([]);
         return;
       }
 
-      const uniqueIds = Array.from(new Set(propios.map((detalle) => detalle.productoId)));
+      const pedidosMap = new Map<number, Pedido>(
+        pedidosPropios.map((pedido) => [Number(pedido.idPedido), pedido])
+      );
+      const pedidoIds = new Set(pedidosMap.keys());
+      const detallesPropios = detalles.filter((detalle) => pedidoIds.has(Number(detalle.idPedido)));
+
+      if (detallesPropios.length === 0) {
+        setPedidosUsuario([]);
+        setCarrito([]);
+        return;
+      }
+
+      const uniqueIds = Array.from(new Set(detallesPropios.map((detalle) => detalle.idProducto)));
       const productosPairs = await Promise.all(
         uniqueIds.map(async (productoId) => {
           try {
@@ -139,16 +229,16 @@ export default function Page() {
 
       const productosMap = new Map<number, Producto | null>(productosPairs);
 
-      const items = propios.map((detalle) => ({
-        detalle,
-        producto: productosMap.get(detalle.productoId) ?? null,
-      }));
+      const items = detallesPropios
+        .map((detalle) => ({
+          pedido: pedidosMap.get(Number(detalle.idPedido)) ?? null,
+          detalle,
+          producto: productosMap.get(detalle.idProducto) ?? null,
+        }))
+        .filter((item): item is ItemCarrito => item.pedido !== null);
 
       setPedidosUsuario(items);
-
-      setCarrito(
-        items.filter((item) => (item.detalle.estado ?? "Pendiente").toLowerCase() === "pendiente")
-      );
+      setCarrito(items);
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : "Ocurrio un error al cargar el carrito."
@@ -166,6 +256,35 @@ export default function Page() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    setNombreRecibe(
+      detalleUsuario ? `${detalleUsuario.nombre} ${detalleUsuario.apellido}`.trim() : ""
+    );
+    setTelefonoContacto(detalleUsuario?.telefono ?? "");
+    setDireccionEntrega(detalleUsuario?.direccion ?? "");
+    setCiudadEntrega(detalleUsuario?.ciudad ?? "");
+  }, [detalleUsuario]);
+
+  const actualizarPedido = useCallback(
+    async (pedidoId: number, payload: Record<string, unknown>) => {
+      await fetchJson<Pedido>(`/api/pedidos/${pedidoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    },
+    [fetchJson]
+  );
+
+  const eliminarPedido = useCallback(
+    async (pedidoId: number) => {
+      await fetchJson<{ idPedido: number }>(`/api/pedidos/${pedidoId}`, {
+        method: "DELETE",
+      });
+    },
+    [fetchJson]
+  );
+
   const ajustarStock = useCallback(
     async (productoId: number, cantidad: number, operacion: "incrementar" | "disminuir") => {
       await fetchJson<{ stock: number }>(`/api/productos/${productoId}`, {
@@ -181,15 +300,33 @@ export default function Page() {
     [fetchJson]
   );
 
+  const sincronizarPedido = useCallback(
+    async (pedidoId: number, items: ItemCarrito[]) => {
+      const itemsDelPedido = items.filter((item) => item.pedido.idPedido === pedidoId);
+      if (itemsDelPedido.length === 0) {
+        await eliminarPedido(pedidoId);
+        return;
+      }
+
+      const subtotal = itemsDelPedido.reduce(
+        (acc, item) => acc + item.detalle.precioUnitario * item.detalle.cantidad,
+        0
+      );
+
+      await actualizarPedido(pedidoId, { subtotal });
+    },
+    [actualizarPedido, eliminarPedido]
+  );
+
   const ejecutarBorrado = useCallback(
     async (item: ItemCarrito) => {
-      await ajustarStock(item.detalle.productoId, item.detalle.cantidad, "incrementar");
+      await ajustarStock(item.detalle.idProducto, item.detalle.cantidad, "incrementar");
       try {
-        await fetchJson<{ id: number }>(`/api/Detallepedido/${item.detalle.id}`, {
+        await fetchJson<{ idDetallePedido: number }>(`/api/detalle_pedido/${item.detalle.idDetallePedido}`, {
           method: "DELETE",
         });
       } catch (err) {
-        await ajustarStock(item.detalle.productoId, item.detalle.cantidad, "disminuir").catch(
+        await ajustarStock(item.detalle.idProducto, item.detalle.cantidad, "disminuir").catch(
           () => undefined
         );
         throw err;
@@ -201,11 +338,17 @@ export default function Page() {
   const eliminarProducto = useCallback(
     async (item: ItemCarrito) => {
       setAccionError(null);
-      setEliminandoId(item.detalle.id);
+      setEliminandoId(item.detalle.idDetallePedido);
       try {
         await ejecutarBorrado(item);
-        setCarrito((prev) => prev.filter((fila) => fila.detalle.id !== item.detalle.id));
-        setPedidosUsuario((prev) => prev.filter((fila) => fila.detalle.id !== item.detalle.id));
+        const carritoActualizado = carrito.filter(
+          (fila) => fila.detalle.idDetallePedido !== item.detalle.idDetallePedido
+        );
+        await sincronizarPedido(item.pedido.idPedido, carritoActualizado);
+        setCarrito(carritoActualizado);
+        setPedidosUsuario((prev) =>
+          prev.filter((fila) => fila.detalle.idDetallePedido !== item.detalle.idDetallePedido)
+        );
       } catch (err) {
         setAccionError(
           err instanceof Error
@@ -216,7 +359,7 @@ export default function Page() {
         setEliminandoId(null);
       }
     },
-    [ejecutarBorrado]
+    [carrito, ejecutarBorrado, sincronizarPedido]
   );
 
   const vaciarCarrito = useCallback(async () => {
@@ -225,28 +368,40 @@ export default function Page() {
     }
     setVaciando(true);
     setAccionError(null);
-    const procesados = new Set(carrito.map((item) => item.detalle.id));
+    const procesados = new Set(carrito.map((item) => item.detalle.idDetallePedido));
     const pendientes: ItemCarrito[] = [];
     for (const item of carrito) {
       try {
         await ejecutarBorrado(item);
-      } catch (err) {
+      } catch {
         pendientes.push(item);
         setAccionError("No se pudieron eliminar todos los productos. Revisa tu conexion e intenta nuevamente.");
       }
     }
+
+    const pedidosPendientes = new Set(pendientes.map((item) => item.pedido.idPedido));
+    const pedidosProcesados = new Set(carrito.map((item) => item.pedido.idPedido));
+    for (const pedidoId of pedidosProcesados) {
+      const itemsRestantes = pendientes.filter((item) => item.pedido.idPedido === pedidoId);
+      if (itemsRestantes.length === 0 || pedidosPendientes.has(pedidoId)) {
+        await sincronizarPedido(pedidoId, pendientes).catch(() => undefined);
+      }
+    }
+
     setCarrito(pendientes);
-    const pendientesIds = new Set(pendientes.map((item) => item.detalle.id));
+    const pendientesIds = new Set(pendientes.map((item) => item.detalle.idDetallePedido));
     setPedidosUsuario((prev) =>
-      prev.filter((item) => !procesados.has(item.detalle.id) || pendientesIds.has(item.detalle.id))
+      prev.filter(
+        (item) => !procesados.has(item.detalle.idDetallePedido) || pendientesIds.has(item.detalle.idDetallePedido)
+      )
     );
     setVaciando(false);
-  }, [carrito, ejecutarBorrado]);
+  }, [carrito, ejecutarBorrado, sincronizarPedido]);
 
   const resumen = useMemo(() => {
     const totalProductos = carrito.reduce((acc, item) => acc + item.detalle.cantidad, 0);
     const subtotal = carrito.reduce(
-      (acc, item) => acc + item.detalle.precioProducto * item.detalle.cantidad,
+      (acc, item) => acc + item.detalle.precioUnitario * item.detalle.cantidad,
       0
     );
     return { totalProductos, subtotal };
@@ -254,52 +409,212 @@ export default function Page() {
 
   const estadoResumen = carrito.length === 0 && !cargando ? "Tu carrito esta vacio." : null;
 
-  const pedidosSeguimiento = useMemo(() => {
-    if (!usuarioActivo) return [];
-    return pedidosUsuario.filter((item) => {
-      const mismoUsuario = Number(item.detalle.idUsuario) === Number(usuarioActivo.id);
-      const estado = (item.detalle.estado ?? "").toLowerCase();
-      return mismoUsuario && estado === "confirmado";
-    });
-  }, [pedidosUsuario, usuarioActivo]);
-
-  const confirmarPedido = useCallback(async () => {
+  const guardarEntregaYContinuar = useCallback(async () => {
     if (carrito.length === 0 || confirmandoPedido) {
       return;
     }
+
+    if (tipoEntrega === "Retiro_tienda" && !fechaHoraRetiro) {
+      setAccionError("Debes seleccionar la fecha y hora de retiro en tienda.");
+      return;
+    }
+
+    if (tipoEntrega === "Retiro_tienda") {
+      const retiroSeleccionado = new Date(fechaHoraRetiro);
+      if (Number.isNaN(retiroSeleccionado.getTime()) || retiroSeleccionado < new Date()) {
+        setAccionError("La fecha y hora de retiro no puede ser anterior a la actual.");
+        return;
+      }
+    }
+
+    if (tipoEntrega === "Domicilio") {
+      const nombreEntregaFinal = entregarOtraDireccion
+        ? nombreRecibe.trim()
+        : `${detalleUsuario?.nombre ?? ""} ${detalleUsuario?.apellido ?? ""}`.trim();
+      const telefonoEntregaFinal = entregarOtraDireccion
+        ? telefonoContacto.trim()
+        : detalleUsuario?.telefono?.trim() ?? "";
+      const direccionEntregaFinal = entregarOtraDireccion
+        ? direccionEntrega.trim()
+        : detalleUsuario?.direccion?.trim() ?? "";
+      const ciudadEntregaFinal = entregarOtraDireccion
+        ? ciudadEntrega.trim()
+        : detalleUsuario?.ciudad?.trim() ?? "";
+
+      if (!nombreEntregaFinal || !telefonoEntregaFinal || !direccionEntregaFinal || !ciudadEntregaFinal) {
+        setAccionError("Completa los datos de entrega para domicilio.");
+        return;
+      }
+    }
+
     setAccionError(null);
     setAccionExito(null);
     setConfirmandoPedido(true);
     try {
-      const idsPendientes = new Set(carrito.map((item) => item.detalle.id));
+      const idsPedidos = Array.from(new Set(carrito.map((item) => item.pedido.idPedido)));
+      const entregas = await fetchJson<Entrega[]>("/api/entrega");
+
       await Promise.all(
-        carrito.map((item) =>
-          fetchJson<DetallePedido>(`/api/Detallepedido/${item.detalle.id}`, {
-            method: "PUT",
+        idsPedidos.map(async (pedidoId) => {
+          const payload: Record<string, unknown> = {
+            idPedido: pedidoId,
+            estadoEntrega: "Pendiente",
+            costoEnvio: 0,
+            observacion: null,
+          };
+
+          if (tipoEntrega === "Retiro_tienda") {
+            payload.fechaHoraRetiro = new Date(fechaHoraRetiro).toISOString();
+            payload.nombreRecibe = null;
+            payload.telefonoContacto = null;
+            payload.direccionEntrega = null;
+            payload.ciudad = null;
+          } else {
+            payload.nombreRecibe = entregarOtraDireccion
+              ? nombreRecibe.trim()
+              : `${detalleUsuario?.nombre ?? ""} ${detalleUsuario?.apellido ?? ""}`.trim();
+            payload.telefonoContacto = entregarOtraDireccion
+              ? telefonoContacto.trim()
+              : detalleUsuario?.telefono?.trim() ?? null;
+            payload.direccionEntrega = entregarOtraDireccion
+              ? direccionEntrega.trim()
+              : detalleUsuario?.direccion?.trim() ?? null;
+            payload.ciudad = entregarOtraDireccion
+              ? ciudadEntrega.trim()
+              : detalleUsuario?.ciudad?.trim() ?? null;
+            payload.fechaHoraRetiro = null;
+          }
+
+          const entregaExistente = entregas.find((entrega) => Number(entrega.idPedido) === pedidoId);
+          if (entregaExistente) {
+            await fetchJson<Entrega>(`/api/entrega/${entregaExistente.idEntrega}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            return;
+          }
+
+          await fetchJson<Entrega>("/api/entrega", {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ estado: "Confirmado" }),
-          })
-        )
+            body: JSON.stringify(payload),
+          });
+        })
       );
-      setPedidosUsuario((prev) =>
-        prev.map((item) =>
-          idsPendientes.has(item.detalle.id)
-            ? { ...item, detalle: { ...item.detalle, estado: "Confirmado" } }
-            : item
-        )
-      );
-      setCarrito((prev) => prev.filter((item) => !idsPendientes.has(item.detalle.id)));
-      setAccionExito("Pedido confirmado correctamente.");
-      setModalPedidoAbierto(true);
-      setMedioPago("efectivo");
+
+      setModalPedidoAbierto(false);
+      setMetodoPagoSeleccionado(tipoEntrega === "Retiro_tienda" ? "Efectivo" : "Contraentrega");
+      setModalPagoAbierto(true);
     } catch (err) {
       setAccionError(
-        err instanceof Error ? err.message : "No se pudo confirmar el pedido. Intenta nuevamente."
+        err instanceof Error ? err.message : "No se pudo guardar la entrega. Intenta nuevamente."
       );
     } finally {
       setConfirmandoPedido(false);
     }
-  }, [carrito, confirmandoPedido, fetchJson]);
+  }, [
+    carrito,
+    ciudadEntrega,
+    confirmandoPedido,
+    detalleUsuario,
+    direccionEntrega,
+    entregarOtraDireccion,
+    fechaHoraRetiro,
+    fetchJson,
+    nombreRecibe,
+    telefonoContacto,
+    tipoEntrega,
+  ]);
+
+  const confirmarPago = useCallback(async () => {
+    if (carrito.length === 0 || confirmandoPago) {
+      return;
+    }
+
+    setAccionError(null);
+    setAccionExito(null);
+    setConfirmandoPago(true);
+
+    try {
+      const idsPedidos = Array.from(new Set(carrito.map((item) => item.pedido.idPedido)));
+      const pagos = await fetchJson<Pago[]>("/api/pago");
+
+      await Promise.all(
+        idsPedidos.map(async (pedidoId) => {
+          const monto = carrito
+            .filter((item) => item.pedido.idPedido === pedidoId)
+            .reduce((acc, item) => acc + item.detalle.precioUnitario * item.detalle.cantidad, 0);
+
+          const esRetiroEfectivo = tipoEntrega === "Retiro_tienda" && metodoPagoSeleccionado === "Efectivo";
+          const esDomicilioContraentrega =
+            tipoEntrega === "Domicilio" && metodoPagoSeleccionado === "Contraentrega";
+
+          await actualizarPedido(pedidoId, {
+            tipoEntrega,
+            estadoPedido: esRetiroEfectivo || esDomicilioContraentrega ? "Confirmado" : "Pendiente",
+          });
+
+          const payloadPago: Record<string, unknown> = {
+            idPedido: pedidoId,
+            metodoPago: metodoPagoSeleccionado,
+            estadoPago: "Pendiente",
+            monto,
+            fechaPago: null,
+            observacion:
+              metodoPagoSeleccionado === "Pago_Online"
+                ? "Pago online gestionado por Mercado Pago"
+                : null,
+          };
+
+          const pagoExistente = pagos.find((pago) => Number(pago.idPedido) === pedidoId);
+          if (pagoExistente) {
+            await fetchJson<Pago>(`/api/pago/${pagoExistente.idPago}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payloadPago),
+            });
+            return;
+          }
+
+          await fetchJson<Pago>("/api/pago", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payloadPago),
+          });
+        })
+      );
+
+      setPedidosUsuario((prev) =>
+        prev.map((item) =>
+          idsPedidos.includes(item.pedido.idPedido)
+            ? {
+                ...item,
+                pedido: {
+                  ...item.pedido,
+                  tipoEntrega,
+                  estadoPedido:
+                    (tipoEntrega === "Retiro_tienda" && metodoPagoSeleccionado === "Efectivo") ||
+                    (tipoEntrega === "Domicilio" && metodoPagoSeleccionado === "Contraentrega")
+                      ? "Confirmado"
+                      : "Pendiente",
+                },
+              }
+            : item
+        )
+      );
+
+      setCarrito([]);
+      setModalPagoAbierto(false);
+      setAccionExito("Pago configurado correctamente.");
+    } catch (err) {
+      setAccionError(
+        err instanceof Error ? err.message : "No se pudo confirmar la informacion de pago."
+      );
+    } finally {
+      setConfirmandoPago(false);
+    }
+  }, [actualizarPedido, carrito, confirmandoPago, fetchJson, metodoPagoSeleccionado, tipoEntrega]);
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10">
@@ -338,7 +653,7 @@ export default function Page() {
             </div>
           )}
 
-          {accionError && (
+          {accionError && !modalPedidoAbierto && !modalPagoAbierto && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
               {accionError}
             </div>
@@ -366,13 +681,13 @@ export default function Page() {
             <div className="space-y-4">
               {carrito.map((item) => {
                 const imagen = item.producto?.imagen || placeholderImagen;
-                const precioUnitario = formatoCOP.format(item.detalle.precioProducto);
+                const precioUnitario = formatoCOP.format(item.detalle.precioUnitario);
                 const subtotal = formatoCOP.format(
-                  item.detalle.precioProducto * item.detalle.cantidad
+                  item.detalle.precioUnitario * item.detalle.cantidad
                 );
                 return (
                   <article
-                    key={item.detalle.id}
+                    key={item.detalle.idDetallePedido}
                     className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 sm:flex-row sm:items-center"
                   >
                     <div className="flex items-center justify-center rounded-xl bg-gray-100 p-2">
@@ -396,9 +711,8 @@ export default function Page() {
                       </p>
 
                       <p className="text-sm text-gray-500">
-                        {item.detalle.fechaPago
-                          ? `Fecha de pago: ${new Date(item.detalle.fechaPago).toLocaleDateString()}`
-                          : "Pago pendiente"}
+                        Pedido #{item.pedido.idPedido} | Creado el{" "}
+                        {new Date(item.pedido.fechaCreacion).toLocaleDateString()}
                       </p>
                     </div>
 
@@ -414,11 +728,11 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => void eliminarProducto(item)}
-                        disabled={eliminandoId === item.detalle.id || vaciando}
+                        disabled={eliminandoId === item.detalle.idDetallePedido || vaciando}
                         className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <FaTrash />
-                        {eliminandoId === item.detalle.id ? "Eliminando..." : "Eliminar"}
+                        {eliminandoId === item.detalle.idDetallePedido ? "Eliminando..." : "Eliminar"}
                       </button>
                     </div>
                   </article>
@@ -426,40 +740,6 @@ export default function Page() {
               })}
             </div>
           )}
-
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-            <h3 className="text-xl font-semibold text-gray-900">Seguimiento de pedidos</h3>
-            <p className="text-sm text-gray-500">
-              Consulta tus productos confirmados para el envio.
-            </p>
-            {pedidosSeguimiento.length === 0 ? (
-              <p className="mt-4 text-sm text-gray-500">
-                No hay pedidos en este momento.
-              </p>
-            ) : (
-              <ul className="mt-4 space-y-3">
-                {pedidosSeguimiento.map((item) => (
-                  <li
-                    key={`tracking-${item.detalle.id}`}
-                    className="rounded-xl border border-gray-100 p-4 text-sm text-gray-600"
-                  >
-                    <p className="font-semibold text-gray-900">
-                      {item.producto?.nombre ?? "Producto sin nombre"}
-                    </p>
-                    <p className="mt-2">
-                      Ultima actualizacion:{" "}
-                      {item.detalle.fechaPago
-                        ? new Date(item.detalle.fechaPago).toLocaleDateString()
-                        : "En proceso"}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Cantidad {item.detalle.cantidad}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </section>
 
         <aside className="w-full lg:w-80">
@@ -485,15 +765,15 @@ export default function Page() {
 
             <button
               type="button"
-              onClick={() => void confirmarPedido()}
+              onClick={() => {
+                setAccionError(null);
+                setModalPedidoAbierto(true);
+              }}
               disabled={carrito.length === 0 || confirmandoPedido}
               className="mt-6 w-full rounded-xl bg-blue-600 py-3 text-lg font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {confirmandoPedido ? "Confirmando..." : "Realizar pedido"}
+              {confirmandoPedido ? "Guardando..." : "Seguir comprando"}
             </button>
-            <p className="mt-3 text-center text-xs text-gray-400">
-              Los precios no incluyen costos de envio.
-            </p>
           </div>
         </aside>
       </div>
@@ -506,39 +786,130 @@ export default function Page() {
               Revisa tu informacion antes de finalizar.
             </p>
 
-            <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
-              <p className="text-sm font-semibold text-gray-700">Envio</p>
-              <p className="text-sm text-gray-600">
-                Direccion: {detalleUsuario?.direccion ?? "Sin direccion registrada"}
-              </p>
-              <p className="text-sm text-gray-600">
-                Ciudad: {detalleUsuario?.ciudad ?? "Sin ciudad registrada"}
-              </p>
-            </div>
+            {accionError && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                {accionError}
+              </div>
+            )}
 
             <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
-              <p className="text-sm font-semibold text-gray-700">Tipo de pago</p>
+              <p className="text-sm font-semibold text-gray-700">Tipo de entrega</p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                {(["efectivo", "tarjeta"] as const).map((opcion) => (
+                {([
+                  { value: "Domicilio", label: "Domicilio" },
+                  { value: "Retiro_tienda", label: "Retiro en tienda" },
+                ] as const).map((opcion) => (
                   <label
-                    key={opcion}
+                    key={opcion.value}
                     className={`flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
-                      medioPago === opcion ? "border-sky-400 text-black" : "border-gray-200 text-gray-700"
+                      tipoEntrega === opcion.value ? "border-sky-400 text-black" : "border-gray-200 text-gray-700"
                     }`}
                   >
                     <input
                       type="radio"
-                      name="medioPago"
-                      value={opcion}
-                      checked={medioPago === opcion}
-                      onChange={() => setMedioPago(opcion)}
+                      name="tipoEntrega"
+                      value={opcion.value}
+                      checked={tipoEntrega === opcion.value}
+                      onChange={() => setTipoEntrega(opcion.value)}
                       className="h-4 w-4"
                     />
-                    {opcion === "efectivo" ? "Efectivo" : "Tarjeta"}
+                    {opcion.label}
                   </label>
                 ))}
               </div>
             </div>
+
+            {tipoEntrega === "Retiro_tienda" ? (
+              <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
+                <p className="text-sm font-semibold text-gray-700">Retiro en tienda</p>
+                <label className="block text-sm text-gray-600">
+                  Hora al recoger
+                  <input
+                    type="datetime-local"
+                    value={fechaHoraRetiro}
+                    onChange={(e) => setFechaHoraRetiro(e.target.value)}
+                    min={ahoraMinimaRetiro}
+                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
+                <p className="text-sm font-semibold text-gray-700">Datos de entrega</p>
+                {!entregarOtraDireccion ? (
+                  <>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <p>Nombre de quien recibe: {`${detalleUsuario?.nombre ?? ""} ${detalleUsuario?.apellido ?? ""}`.trim() || "Sin nombre registrado"}</p>
+                      <p>Telefono: {detalleUsuario?.telefono ?? "Sin telefono registrado"}</p>
+                      <p>Direccion: {detalleUsuario?.direccion ?? "Sin direccion registrada"}</p>
+                      <p>Ciudad: {detalleUsuario?.ciudad ?? "Sin ciudad registrada"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEntregarOtraDireccion(true)}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-sky-600 hover:text-sky-500"
+                    >
+                      <FaPen />
+                      Entregar a otra direccion
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm text-gray-600">
+                      Nombre de quien recibe
+                      <input
+                        type="text"
+                        value={nombreRecibe}
+                        onChange={(e) => setNombreRecibe(e.target.value)}
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                      />
+                    </label>
+                    <label className="block text-sm text-gray-600">
+                      Telefono
+                      <input
+                        type="text"
+                        value={telefonoContacto}
+                        onChange={(e) => setTelefonoContacto(e.target.value)}
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                      />
+                    </label>
+                    <label className="block text-sm text-gray-600">
+                      Direccion
+                      <input
+                        type="text"
+                        value={direccionEntrega}
+                        onChange={(e) => setDireccionEntrega(e.target.value)}
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                      />
+                    </label>
+                    <label className="block text-sm text-gray-600">
+                      Ciudad
+                      <input
+                        type="text"
+                        value={ciudadEntrega}
+                        onChange={(e) => setCiudadEntrega(e.target.value)}
+                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEntregarOtraDireccion(false);
+                        setNombreRecibe(
+                          detalleUsuario ? `${detalleUsuario.nombre} ${detalleUsuario.apellido}`.trim() : ""
+                        );
+                        setTelefonoContacto(detalleUsuario?.telefono ?? "");
+                        setDireccionEntrega(detalleUsuario?.direccion ?? "");
+                        setCiudadEntrega(detalleUsuario?.ciudad ?? "");
+                      }}
+                      className="text-sm font-semibold text-gray-500 hover:text-gray-700"
+                    >
+                      Usar direccion registrada
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -553,13 +924,148 @@ export default function Page() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setModalPedidoAbierto(false);
-                  setAccionExito(null);
-                }}
+                onClick={() => void guardarEntregaYContinuar()}
                 className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
               >
-                Aceptar
+                {confirmandoPedido ? "Guardando..." : "Proceder al pago"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalPagoAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 text-gray-800 shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-900">Pago del pedido</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              La entrega ya fue registrada. Ahora define como deseas pagar.
+            </p>
+
+            {accionError && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+                {accionError}
+              </div>
+            )}
+
+            <div className="mt-5 rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+              <p>Tipo de entrega: {tipoEntrega === "Domicilio" ? "Domicilio" : "Retiro en tienda"}</p>
+              {tipoEntrega === "Retiro_tienda" && fechaHoraRetiro && (
+                <p>Retiro programado: {new Date(fechaHoraRetiro).toLocaleString()}</p>
+              )}
+            </div>
+
+            <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
+              <p className="text-sm font-semibold text-gray-700">Metodo de pago</p>
+              <div className="flex flex-col gap-2">
+                {tipoEntrega === "Domicilio" ? (
+                  <>
+                    <label
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                        metodoPagoSeleccionado === "Pago_Online"
+                          ? "border-sky-400 bg-white"
+                          : "border-gray-200 bg-white/70"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="metodoPago"
+                        checked={metodoPagoSeleccionado === "Pago_Online"}
+                        onChange={() => setMetodoPagoSeleccionado("Pago_Online")}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block font-semibold text-gray-900">Pago Online</span>
+                        <span className="block text-gray-500">
+                          El pago online sera manejado por Mercado Pago con un flujo seguro.
+                        </span>
+                      </span>
+                    </label>
+                    <label
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                        metodoPagoSeleccionado === "Contraentrega"
+                          ? "border-sky-400 bg-white"
+                          : "border-gray-200 bg-white/70"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="metodoPago"
+                        checked={metodoPagoSeleccionado === "Contraentrega"}
+                        onChange={() => setMetodoPagoSeleccionado("Contraentrega")}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block font-semibold text-gray-900">Contraentrega</span>
+                        <span className="block text-gray-500">
+                          Pagas al recibir el pedido en tu domicilio.
+                        </span>
+                      </span>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                        metodoPagoSeleccionado === "Efectivo"
+                          ? "border-sky-400 bg-white"
+                          : "border-gray-200 bg-white/70"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="metodoPago"
+                        checked={metodoPagoSeleccionado === "Efectivo"}
+                        onChange={() => setMetodoPagoSeleccionado("Efectivo")}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block font-semibold text-gray-900">Efectivo en tienda</span>
+                        <span className="block text-gray-500">
+                          Pagas directamente en la tienda al momento de recoger.
+                        </span>
+                      </span>
+                    </label>
+                    <label
+                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                        metodoPagoSeleccionado === "Pago_Online"
+                          ? "border-sky-400 bg-white"
+                          : "border-gray-200 bg-white/70"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="metodoPago"
+                        checked={metodoPagoSeleccionado === "Pago_Online"}
+                        onChange={() => setMetodoPagoSeleccionado("Pago_Online")}
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block font-semibold text-gray-900">Pago Online</span>
+                        <span className="block text-gray-500">
+                          El pago online sera manejado por Mercado Pago con proteccion y seguridad.
+                        </span>
+                      </span>
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setModalPagoAbierto(false)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                Cerrar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmarPago()}
+                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+              >
+                {confirmandoPago ? "Confirmando..." : "Confirmar"}
               </button>
             </div>
           </div>

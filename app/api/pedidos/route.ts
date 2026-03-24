@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/app/Datalibs/database";
-import { getUserFromSession } from "@/app/Datalibs/auth";
 import { DatabaseError } from "pg";
+import { getUserFromSession } from "@/app/Datalibs/auth";
 
 export const runtime = "nodejs";
 
@@ -46,37 +46,6 @@ const toDto = (row: PedidoRow) => ({
   total: Number(row.total),
 });
 
-async function ensureVendedorActivo(id: number) {
-  const { rows } = await sql<{ activo: boolean | null }>(
-    `
-      SELECT u.activo
-      FROM public.usuario AS u
-      WHERE u.idusuario = $1
-      LIMIT 1;
-    `,
-    [id]
-  );
-
-  if (!rows[0]) {
-    return { ok: false as const, error: "El usuario vendedor no existe." };
-  }
-
-  if (!rows[0].activo) {
-    return { ok: false as const, error: "El usuario vendedor no esta activo." };
-  }
-
-  await sql(
-    `
-      INSERT INTO public.vendedor (idvendedor, estado, fechaingreso)
-      VALUES ($1, $2, NOW())
-      ON CONFLICT (idvendedor) DO NOTHING;
-    `,
-    [id, true]
-  );
-
-  return { ok: true as const };
-}
-
 export async function GET() {
   try {
     const { rows } = await sql<PedidoRow>(`${baseSelect} ORDER BY id_pedido DESC;`);
@@ -97,22 +66,14 @@ export async function POST(req: NextRequest) {
 
     if (!sessionUser?.idusuario) {
       return NextResponse.json(
-        { ok: false, error: "No hay un vendedor activo en la sesion." },
+        { ok: false, error: "No hay un usuario activo en la sesion." },
         { status: 401 }
-      );
-    }
-
-    const vendedorResult = await ensureVendedorActivo(sessionUser.idusuario);
-    if (!vendedorResult.ok) {
-      return NextResponse.json(
-        { ok: false, error: vendedorResult.error },
-        { status: 400 }
       );
     }
 
     const clienteInput =
       body?.idCliente ?? body?.id_cliente ?? body?.idcliente ?? body?.clienteId ?? body?.cliente_id;
-    let idCliente: number | null = null;
+    let idCliente: number | null = sessionUser.idusuario;
     if (clienteInput !== undefined) {
       if (clienteInput !== null && clienteInput !== "") {
         const parsedCliente = Number(clienteInput);
@@ -123,10 +84,27 @@ export async function POST(req: NextRequest) {
           );
         }
         idCliente = parsedCliente;
+      } else {
+        idCliente = null;
       }
     }
 
-    const subtotal = Number(body?.subtotal);
+    const vendedorInput =
+      body?.idVendedor ?? body?.id_vendedor ?? body?.idvendedor ?? body?.vendedorId ?? body?.vendedor_id;
+    let idVendedor: number | null = null;
+    if (vendedorInput !== undefined && vendedorInput !== null && vendedorInput !== "") {
+      const parsedVendedor = Number(vendedorInput);
+      if (!Number.isInteger(parsedVendedor) || parsedVendedor <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "id_vendedor debe ser un entero positivo o null" },
+          { status: 400 }
+        );
+      }
+      idVendedor = parsedVendedor;
+    }
+
+    const subtotalInput = body?.subtotal;
+    const subtotal = subtotalInput === undefined ? 0 : Number(subtotalInput);
     if (!Number.isFinite(subtotal) || subtotal < 0) {
       return NextResponse.json(
         { ok: false, error: "subtotal debe ser un numero valido" },
@@ -147,7 +125,7 @@ export async function POST(req: NextRequest) {
     const tipoEntrega =
       typeof tipoEntregaInput === "string" && tipoEntregaInput.trim().length > 0
         ? tipoEntregaInput.trim()
-        : "Domicilio";
+        : "Pendiente";
 
     const estadoPedidoInput = body?.estadoPedido ?? body?.estado_pedido;
     const estadoPedido =
@@ -250,7 +228,7 @@ export async function POST(req: NextRequest) {
     const { rows } = fechaCreacionInput !== undefined && fechaCreacionInput !== null
       ? await sql<PedidoRow>(pedidoInsertWithFecha, [
         idCliente,
-        sessionUser.idusuario,
+        idVendedor,
         fechaCreacionInput,
         tipoEntrega,
         estadoPedido,
@@ -260,7 +238,7 @@ export async function POST(req: NextRequest) {
       ])
       : await sql<PedidoRow>(pedidoInsertSinFecha, [
         idCliente,
-        sessionUser.idusuario,
+        idVendedor,
         tipoEntrega,
         estadoPedido,
         observacion,
@@ -301,7 +279,10 @@ function mapPedidoError(error: unknown) {
     };
   }
 
-  const code = typeof error === "object" && error && "code" in error ? (error as any).code : null;
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? (error as { code?: unknown }).code
+      : null;
   if (typeof code === "string" && connectionErrorCodes.has(code)) {
     return {
       status: 503,

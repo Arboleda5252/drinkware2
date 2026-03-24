@@ -94,6 +94,7 @@ function Link_Roles(roleId: number | null | undefined): MenuLink[] {
   const defaultLinks: MenuLink[] = [
     { href: "/user/usuario", label: "Mi cuenta" },
     { href: "/user/usuario/compras", label: "Mis compras" },
+    { href: "/user/usuario/seguimiento", label: "Mis pedidos" },
   ];
 
   switch (roleId) {

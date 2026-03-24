@@ -18,6 +18,7 @@ type EntregaRow = {
   fechaAsignacion: string | null;
   fechaSalida: string | null;
   fechaEntrega: string | null;
+  fechaHoraRetiro: string | null;
   observacion: string | null;
 };
 
@@ -36,6 +37,7 @@ const baseSelect = `
     fecha_asignacion AS "fechaAsignacion",
     fecha_salida AS "fechaSalida",
     fecha_entrega AS "fechaEntrega",
+    fecha_hora_retiro AS "fechaHoraRetiro",
     observacion
   FROM public.entrega
 `;
@@ -54,8 +56,23 @@ const toDto = (row: EntregaRow) => ({
   fechaAsignacion: row.fechaAsignacion,
   fechaSalida: row.fechaSalida,
   fechaEntrega: row.fechaEntrega,
+  fechaHoraRetiro: row.fechaHoraRetiro,
   observacion: row.observacion,
 });
+
+async function getTipoEntregaPedido(idPedido: number) {
+  const { rows } = await sql<{ tipoEntrega: string | null }>(
+    `
+      SELECT tipo_entrega AS "tipoEntrega"
+      FROM public.pedido
+      WHERE id_pedido = $1
+      LIMIT 1;
+    `,
+    [idPedido]
+  );
+
+  return rows[0]?.tipoEntrega ?? null;
+}
 
 export async function GET() {
   try {
@@ -166,6 +183,20 @@ export async function POST(req: NextRequest) {
       return fechaEntregaResult.response;
     }
 
+    const fechaHoraRetiroResult = parseDateOrNull(
+      body?.fechaHoraRetiro ?? body?.fecha_hora_retiro,
+      "fecha_hora_retiro"
+    );
+    if (!fechaHoraRetiroResult.ok) {
+      return fechaHoraRetiroResult.response;
+    }
+
+    const tipoEntregaPedido = await getTipoEntregaPedido(idPedido);
+    const fechaHoraRetiro =
+      (tipoEntregaPedido ?? "").toLowerCase() === "domicilio"
+        ? null
+        : fechaHoraRetiroResult.value;
+
     const { rows } = await sql<EntregaRow>(
       `
         INSERT INTO public.entrega
@@ -182,6 +213,7 @@ export async function POST(req: NextRequest) {
             fecha_asignacion,
             fecha_salida,
             fecha_entrega,
+            fecha_hora_retiro,
             observacion
           )
         VALUES
@@ -198,7 +230,8 @@ export async function POST(req: NextRequest) {
             $10::timestamp,
             $11::timestamp,
             $12::timestamp,
-            $13::text
+            $13::timestamp,
+            $14::text
           )
         RETURNING
           id_entrega AS "idEntrega",
@@ -214,6 +247,7 @@ export async function POST(req: NextRequest) {
           fecha_asignacion AS "fechaAsignacion",
           fecha_salida AS "fechaSalida",
           fecha_entrega AS "fechaEntrega",
+          fecha_hora_retiro AS "fechaHoraRetiro",
           observacion;
       `,
       [
@@ -229,6 +263,7 @@ export async function POST(req: NextRequest) {
         fechaAsignacionResult.value,
         fechaSalidaResult.value,
         fechaEntregaResult.value,
+        fechaHoraRetiro,
         observacion,
       ]
     );
@@ -266,7 +301,10 @@ function mapEntregaError(error: unknown) {
     };
   }
 
-  const code = typeof error === "object" && error && "code" in error ? (error as any).code : null;
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? (error as { code?: unknown }).code
+      : null;
   if (typeof code === "string" && connectionErrorCodes.has(code)) {
     return {
       status: 503,
