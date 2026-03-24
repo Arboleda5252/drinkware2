@@ -15,6 +15,7 @@ export default function MercadoPagoWalletButtonEnv({
 }: MercadoPagoWalletButtonEnvProps) {
   const publicKey =
     process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY ??
+    process.env.YOUR_PUBLIC_KEY ??
     DEFAULT_MERCADOPAGO_PUBLIC_KEY;
 
   const resolvedPreferenceId = preferenceId ?? "";
