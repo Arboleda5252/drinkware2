@@ -112,6 +112,12 @@ function Link_Roles(roleId: number | null | undefined): MenuLink[] {
         { href: "/user/vendedor", label: "Gestión de Ventas" },
         { href: "/user/vendedor/pedidos", label: "Gestión de Pedidos" },
       ];
+    case 4:
+      return [
+      ...defaultLinks,
+      { href: "/user/domiciliario", label: "Gestión de Entregas" },
+      { href: "/user/domiciliario/Turnos", label: "Mis entregas" },
+    ];
     case 5:
       return [
         ...defaultLinks,
