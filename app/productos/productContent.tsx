@@ -610,7 +610,7 @@ export default function Page() {
   return (
     <main className="bg-black py-3 text-gray-800 sm:py-10 lg:py-12">
       {/* BOTÓN DEL CARRITO */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
         <button
           onClick={() => setDrawerAbierto(true)}
           className="flex items-center gap-2 rounded-full bg-slate-900 px-5 py-4 text-lg text-white shadow-lg transition hover:bg-sky-600"

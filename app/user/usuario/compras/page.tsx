@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FaPen, FaTrash } from "react-icons/fa";
-import MercadoPagoWalletButtonEnv from "@/app/ui/mercadopago-wallet-button-env";
+import StripeCheckoutContainer from "@/app/ui/stripe-checkout-container";
 
 type Usuario = {
   id: number;
@@ -90,22 +90,6 @@ type Pago = {
   observacion: string | null;
 };
 
-type PreferenceResponseData = {
-  id: string | null;
-  preference_id: string | null;
-  init_point: string | null;
-  sandbox_init_point: string | null;
-  idPedidos: number[];
-};
-
-type PreferenceRequestItem = {
-  id: string;
-  title: string;
-  quantity: number;
-  currency_id: string;
-  unit_price: number;
-};
-
 const formatoCOP = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
@@ -132,7 +116,7 @@ export default function Page() {
   const [modalPagoAbierto, setModalPagoAbierto] = useState(false);
   const [tipoEntrega, setTipoEntrega] = useState<"Domicilio" | "Retiro_tienda">("Domicilio");
   const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState<
-    "Pago_Online" | "Contraentrega" | "Efectivo"
+    "Contraentrega" | "Efectivo" | "Stripe"
   >("Contraentrega");
   const [fechaHoraRetiro, setFechaHoraRetiro] = useState("");
   const [entregarOtraDireccion, setEntregarOtraDireccion] = useState(false);
@@ -140,10 +124,6 @@ export default function Page() {
   const [telefonoContacto, setTelefonoContacto] = useState("");
   const [direccionEntrega, setDireccionEntrega] = useState("");
   const [ciudadEntrega, setCiudadEntrega] = useState("");
-  const [preferenceId, setPreferenceId] = useState<string | null>(null);
-  const [preferencePedidosKey, setPreferencePedidosKey] = useState<string | null>(null);
-  const [preferenceIntentadaKey, setPreferenceIntentadaKey] = useState<string | null>(null);
-  const [generandoPreferencia, setGenerandoPreferencia] = useState(false);
 
   const fetchJson = useCallback(async <T,>(url: string, init?: RequestInit) => {
     const response = await fetch(url, {
@@ -590,8 +570,8 @@ export default function Page() {
             monto,
             fechaPago: null,
             observacion:
-              metodoPagoSeleccionado === "Pago_Online"
-                ? "Pago online gestionado por Mercado Pago"
+              metodoPagoSeleccionado === "Stripe"
+                ? "Pago online pendiente de integracion final con Stripe"
                 : null,
           };
 
@@ -623,7 +603,8 @@ export default function Page() {
                   tipoEntrega,
                   estadoPedido:
                     (tipoEntrega === "Retiro_tienda" && metodoPagoSeleccionado === "Efectivo") ||
-                    (tipoEntrega === "Domicilio" && metodoPagoSeleccionado === "Contraentrega")
+                    (tipoEntrega === "Domicilio" &&
+                      metodoPagoSeleccionado === "Contraentrega")
                       ? "Confirmado"
                       : "Pendiente",
                 },
@@ -643,129 +624,6 @@ export default function Page() {
       setConfirmandoPago(false);
     }
   }, [actualizarPedido, carrito, confirmandoPago, fetchJson, metodoPagoSeleccionado, tipoEntrega]);
-
-  const prepararPagoOnline = useCallback(async () => {
-    if (
-      carrito.length === 0 ||
-      confirmandoPago ||
-      generandoPreferencia ||
-      idsPedidosCarrito.length === 0
-    ) {
-      return;
-    }
-
-    const currentKey = `${tipoEntrega}:${idsPedidosCarrito.join(",")}`;
-    if (preferenceId && preferencePedidosKey === currentKey) {
-      return;
-    }
-    if (preferenceIntentadaKey === currentKey) {
-      return;
-    }
-
-    const itemsPreferencia: PreferenceRequestItem[] = carrito.map((item) => ({
-      id: `${item.pedido.idPedido}-${item.detalle.idDetallePedido}`,
-      title: item.producto?.nombre ?? `Producto ${item.detalle.idProducto}`,
-      quantity: item.detalle.cantidad,
-      currency_id: "COP",
-      unit_price: item.detalle.precioUnitario,
-    }));
-
-    setAccionError(null);
-    setAccionExito(null);
-    setGenerandoPreferencia(true);
-    setPreferenceIntentadaKey(currentKey);
-
-    try {
-      const pagos = await fetchJson<Pago[]>("/api/pago");
-
-      await Promise.all(
-        idsPedidosCarrito.map(async (pedidoId) => {
-          const monto = carrito
-            .filter((item) => item.pedido.idPedido === pedidoId)
-            .reduce((acc, item) => acc + item.detalle.precioUnitario * item.detalle.cantidad, 0);
-
-          const payloadPago: Record<string, unknown> = {
-            idPedido: pedidoId,
-            metodoPago: "Pago_Online",
-            estadoPago: "Pendiente",
-            monto,
-            fechaPago: null,
-            observacion: "Pago online gestionado por Mercado Pago",
-          };
-
-          const pagoExistente = pagos.find((pago) => Number(pago.idPedido) === pedidoId);
-          if (pagoExistente) {
-            await fetchJson<Pago>(`/api/pago/${pagoExistente.idPago}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payloadPago),
-            });
-            return;
-          }
-
-          await fetchJson<Pago>("/api/pago", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payloadPago),
-          });
-        })
-      );
-
-      const preference = await fetchJson<PreferenceResponseData>("/api/mercadopago/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPedidos: idsPedidosCarrito,
-          items: itemsPreferencia,
-          external_reference: `pedido-${idsPedidosCarrito.join("-")}`,
-        }),
-      });
-
-      if (!preference.preference_id) {
-        throw new Error("Mercado Pago no devolvio un preference_id valido.");
-      }
-
-      setPreferenceId(preference.preference_id);
-      setPreferencePedidosKey(currentKey);
-    } catch (err) {
-      setPreferenceId(null);
-      setPreferencePedidosKey(null);
-      setAccionError(
-        err instanceof Error ? err.message : "No se pudo preparar el pago online."
-      );
-    } finally {
-      setGenerandoPreferencia(false);
-    }
-  }, [
-    carrito,
-    confirmandoPago,
-    fetchJson,
-    generandoPreferencia,
-    idsPedidosCarrito,
-    preferenceIntentadaKey,
-    preferenceId,
-    preferencePedidosKey,
-    tipoEntrega,
-  ]);
-
-  useEffect(() => {
-    if (!modalPagoAbierto) {
-      setPreferenceId(null);
-      setPreferencePedidosKey(null);
-      setPreferenceIntentadaKey(null);
-      setGenerandoPreferencia(false);
-      return;
-    }
-
-    if (metodoPagoSeleccionado !== "Pago_Online") {
-      setPreferenceId(null);
-      setPreferencePedidosKey(null);
-      setPreferenceIntentadaKey(null);
-      return;
-    }
-
-    void prepararPagoOnline();
-  }, [metodoPagoSeleccionado, modalPagoAbierto, prepararPagoOnline]);
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10">
@@ -969,7 +827,12 @@ export default function Page() {
                       name="tipoEntrega"
                       value={opcion.value}
                       checked={tipoEntrega === opcion.value}
-                      onChange={() => setTipoEntrega(opcion.value)}
+                      onChange={() => {
+                        setTipoEntrega(opcion.value);
+                        setMetodoPagoSeleccionado(
+                          opcion.value === "Retiro_tienda" ? "Efectivo" : "Contraentrega"
+                        );
+                      }}
                       className="h-4 w-4"
                     />
                     {opcion.label}
@@ -1095,7 +958,11 @@ export default function Page() {
 
       {modalPagoAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 text-gray-800 shadow-xl">
+          <div
+            className={`w-full rounded-2xl bg-white p-6 text-gray-800 shadow-xl ${
+              metodoPagoSeleccionado === "Stripe" ? "max-w-5xl" : "max-w-lg"
+            }`}
+          >
             <h2 className="text-2xl font-bold text-gray-900">Pago del pedido</h2>
             <p className="mt-1 text-sm text-gray-500">
               La entrega ya fue registrada. Ahora define como deseas pagar.
@@ -1107,149 +974,147 @@ export default function Page() {
               </div>
             )}
 
-            <div className="mt-5 rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
-              <p>Tipo de entrega: {tipoEntrega === "Domicilio" ? "Domicilio" : "Retiro en tienda"}</p>
-              {tipoEntrega === "Retiro_tienda" && fechaHoraRetiro && (
-                <p>Retiro programado: {new Date(fechaHoraRetiro).toLocaleString()}</p>
+            <div
+              className={`mt-5 grid gap-5 ${
+                metodoPagoSeleccionado === "Stripe" ? "lg:grid-cols-[360px_minmax(0,1fr)]" : ""
+              }`}
+            >
+              <div className="space-y-5">
+                <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+                  <p>
+                    Tipo de entrega: {tipoEntrega === "Domicilio" ? "Domicilio" : "Retiro en tienda"}
+                  </p>
+                  {tipoEntrega === "Retiro_tienda" && fechaHoraRetiro && (
+                    <p>Retiro programado: {new Date(fechaHoraRetiro).toLocaleString()}</p>
+                  )}
+                </div>
+
+                <div className="space-y-3 rounded-xl bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-700">Metodo de pago</p>
+                  <div className="flex flex-col gap-2">
+                    {tipoEntrega === "Domicilio" ? (
+                      <>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Contraentrega"
+                              ? "border-sky-400 bg-white"
+                              : "border-gray-200 bg-white/70"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Contraentrega"}
+                            onChange={() => setMetodoPagoSeleccionado("Contraentrega")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-gray-900">Contraentrega</span>
+                            <span className="block text-gray-500">
+                              Pagas al recibir el pedido en tu domicilio.
+                            </span>
+                          </span>
+                        </label>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Stripe"
+                              ? "border-sky-400 bg-white"
+                              : "border-gray-200 bg-white/70"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Stripe"}
+                            onChange={() => setMetodoPagoSeleccionado("Stripe")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-gray-900">Stripe</span>
+                            <span className="block text-gray-500">
+                              Pago online con tarjeta usando Stripe.
+                            </span>
+                          </span>
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Efectivo"
+                              ? "border-sky-400 bg-white"
+                              : "border-gray-200 bg-white/70"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Efectivo"}
+                            onChange={() => setMetodoPagoSeleccionado("Efectivo")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-gray-900">Efectivo en tienda</span>
+                            <span className="block text-gray-500">
+                              Pagas directamente en la tienda al momento de recoger.
+                            </span>
+                          </span>
+                        </label>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Stripe"
+                              ? "border-sky-400 bg-white"
+                              : "border-gray-200 bg-white/70"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Stripe"}
+                            onChange={() => setMetodoPagoSeleccionado("Stripe")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-gray-900">Stripe</span>
+                            <span className="block text-gray-500">
+                              Pago online con tarjeta usando Stripe.
+                            </span>
+                          </span>
+                        </label>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {metodoPagoSeleccionado === "Stripe" && (
+                <div className="rounded-2xl bg-indigo-50 p-5">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-indigo-900">Pago online con Stripe</p>
+                      <p className="mt-1 text-sm text-indigo-700">
+                        El monto del pedido se envia a Stripe desde este checkout en pesos
+                        colombianos.
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white px-4 py-3 text-right shadow-sm ring-1 ring-indigo-100">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
+                        Total
+                      </p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {formatoCOP.format(resumen.subtotal)}
+                      </p>
+                    </div>
+                  </div>
+                  <StripeCheckoutContainer
+                    amount={resumen.subtotal}
+                    idCliente={usuarioActivo?.id ?? null}
+                    idPedidos={idsPedidosCarrito}
+                    tipoEntrega={tipoEntrega}
+                  />
+                </div>
               )}
             </div>
-
-            <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
-              <p className="text-sm font-semibold text-gray-700">Metodo de pago</p>
-              <div className="flex flex-col gap-2">
-                {tipoEntrega === "Domicilio" ? (
-                  <>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Pago_Online"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Pago_Online"}
-                        onChange={() => setMetodoPagoSeleccionado("Pago_Online")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Pago Online</span>
-                        <span className="block text-gray-500">
-                          El pago online sera manejado por Mercado Pago con un flujo seguro.
-                        </span>
-                      </span>
-                    </label>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Contraentrega"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Contraentrega"}
-                        onChange={() => setMetodoPagoSeleccionado("Contraentrega")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Contraentrega</span>
-                        <span className="block text-gray-500">
-                          Pagas al recibir el pedido en tu domicilio.
-                        </span>
-                      </span>
-                    </label>
-                  </>
-                ) : (
-                  <>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Efectivo"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Efectivo"}
-                        onChange={() => setMetodoPagoSeleccionado("Efectivo")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Efectivo en tienda</span>
-                        <span className="block text-gray-500">
-                          Pagas directamente en la tienda al momento de recoger.
-                        </span>
-                      </span>
-                    </label>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Pago_Online"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Pago_Online"}
-                        onChange={() => setMetodoPagoSeleccionado("Pago_Online")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Pago Online</span>
-                        <span className="block text-gray-500">
-                          El pago online sera manejado por Mercado Pago con proteccion y seguridad.
-                        </span>
-                      </span>
-                    </label>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {metodoPagoSeleccionado === "Pago_Online" && (
-              <div className="mt-5 rounded-xl bg-sky-50 p-4">
-                <p className="text-sm font-semibold text-sky-900">
-                  Pago online con Mercado Pago
-                </p>
-                <p className="mt-1 text-sm text-sky-700">
-                  Se generara una preferencia con los pedidos actuales y su valor total. Al
-                  completar el pago, Mercado Pago te redirigira segun el estado de la transaccion.
-                </p>
-
-                {generandoPreferencia ? (
-                  <div className="mt-4 rounded-xl border border-sky-200 bg-white p-4 text-sm text-sky-700">
-                    Generando boton de pago...
-                  </div>
-                ) : preferenceId ? (
-                  <div className="mt-4 rounded-xl border border-sky-200 bg-white p-4">
-                    <MercadoPagoWalletButtonEnv
-                      preferenceId={preferenceId ?? ""}
-                      title="Boton de pago"
-                      description="Haz clic en el boton para continuar con Mercado Pago."
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-                    <p>Aun no se pudo generar la preferencia de pago.</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPreferenceIntentadaKey(null);
-                        void prepararPagoOnline();
-                      }}
-                      className="mt-3 rounded-lg border border-amber-300 px-3 py-2 font-semibold text-amber-700 hover:bg-amber-100"
-                    >
-                      Reintentar
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -1259,15 +1124,18 @@ export default function Page() {
               >
                 Cerrar
               </button>
-              {metodoPagoSeleccionado !== "Pago_Online" && (
-                <button
-                  type="button"
-                  onClick={() => void confirmarPago()}
-                  className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
-                >
-                  {confirmandoPago ? "Confirmando..." : "Confirmar"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => void confirmarPago()}
+                disabled={confirmandoPago || metodoPagoSeleccionado === "Stripe"}
+                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+              >
+                {metodoPagoSeleccionado === "Stripe"
+                  ? "Pendiente integracion"
+                  : confirmandoPago
+                    ? "Confirmando..."
+                    : "Confirmar"}
+              </button>
             </div>
           </div>
         </div>
