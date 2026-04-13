@@ -175,6 +175,16 @@ export default function Page() {
     setFeedback(null);
   };
 
+  const removeCartItem = useCallback((productId: string) => {
+    setCartItems((prev) => prev.filter((item) => item.productId !== productId));
+    setFeedback(null);
+
+    if (selectedProductId === productId) {
+      setQuantity(null);
+      setStockError("");
+    }
+  }, [selectedProductId]);
+
   const ajustarStockProducto = useCallback(
     async (
       productoId: number,
@@ -311,9 +321,8 @@ export default function Page() {
       const estadoPedido = paymentTypeValue === "efectivo" ? "Entregado" : "Pendiente";
       const paymentTypeLabelMap: Record<string, string> = {
         efectivo: "Efectivo",
-        transferencia: "Transferencia",
-        tarjeta: "Tarjeta",
         contraentrega: "Contraentrega",
+        pago_online: "Pago Online",
       };
       const paymentTypeLabel = paymentTypeValue
         ? paymentTypeLabelMap[paymentTypeValue] ?? paymentTypeValue
@@ -773,6 +782,7 @@ export default function Page() {
           registering={registering}
           vendedorError={vendedorError}
           feedback={feedback}
+          onRemoveCartItem={removeCartItem}
           onDeliveryTypeChange={setDeliveryType}
           onPaymentTypeChange={setPaymentType}
           onPickupDateTimeChange={setPickupDateTime}

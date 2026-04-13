@@ -17,6 +17,7 @@ type OrderSummaryProps = {
   registering: boolean;
   vendedorError: string;
   feedback: FeedbackState | null;
+  onRemoveCartItem: (productId: string) => void;
   onDeliveryTypeChange: (value: "Domicilio" | "Retiro_tienda") => void;
   onPaymentTypeChange: (value: string) => void;
   onPickupDateTimeChange: (value: string) => void;
@@ -34,6 +35,7 @@ export function OrderSummary({
   registering,
   vendedorError,
   feedback,
+  onRemoveCartItem,
   onDeliveryTypeChange,
   onPaymentTypeChange,
   onPickupDateTimeChange,
@@ -56,6 +58,7 @@ export function OrderSummary({
                 <th className="py-2">Cantidad</th>
                 <th className="py-2">Precio unidad</th>
                 <th className="py-2">Subtotal</th>
+                <th className="py-2 text-right">Accion</th>
               </tr>
             </thead>
             <tbody>
@@ -66,6 +69,15 @@ export function OrderSummary({
                   <td className="py-3">${item.price.toLocaleString("es-CO")}</td>
                   <td className="py-3 font-semibold text-slate-900">
                     ${item.subtotal.toLocaleString("es-CO")}
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => onRemoveCartItem(item.productId)}
+                      className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-400"
+                    >
+                      Quitar
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -158,10 +170,8 @@ export function OrderSummary({
                     Selecciona un tipo de pago
                   </option>
                   <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">Transferencia</option>
-                  <option value="tarjeta">Tarjeta</option>
                   <option value="contraentrega">Contraentrega</option>
-                  <option value="otro">PSE</option>
+                  <option value="pago_online">Pago Online</option>
                 </select>
               </label>
             </div>
