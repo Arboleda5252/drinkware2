@@ -511,8 +511,8 @@ export default function Page() {
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/5">
               <p className="text-base font-semibold text-slate-200">Pago</p>
               {esSeccionPendientes && (
-                <div className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-3 text-base text-amber-100">
-                  Por favor recuerda recoger tu producto en la fecha seleccionada.
+                <div className="mt-3 rounded-2xl text-center border border-amber-300/20 bg-amber-400/10 px-3 py-3 text-base text-amber-100">
+                  Recuerda pasar por tu producto en la fecha que elegiste, ¡te estaremos esperando!
                 </div>
               )}
               <p className="mt-2 text-base text-slate-300">
@@ -520,9 +520,6 @@ export default function Page() {
               </p>
               <p className="mt-1 text-base text-slate-300">
                 Estado: {pago?.estadoPago ?? "Sin registrar"}
-              </p>
-              <p className="mt-1 text-base text-slate-300">
-                Valor de la compra: {formatoCOP.format(pedido.subtotal)}
               </p>
             </div>
 
@@ -541,9 +538,6 @@ export default function Page() {
               <p className="text-base font-semibold text-slate-200">Resumen</p>
               <p className="mt-2 text-base text-slate-300">
                 Subtotal: {formatoCOP.format(pedido.subtotal)}
-              </p>
-              <p className="mt-1 text-base text-slate-300">
-                Costo de envio: {formatoCOP.format(pedido.costoEnvio)}
               </p>
               <p className="mt-3 text-lg font-bold text-white">
                 Total: {formatoCOP.format(totalPedido)}
@@ -604,16 +598,13 @@ export default function Page() {
             <h1 className="text-3xl font-bold text-white">Mis pedidos</h1>
             {usuarioActivo && (
               <p className="mt-2 text-sm text-slate-300">
-                Hola, {" "}. Aquí puedes rastrear tus productos.
+                Hola, 
                 <span className="font-semibold text-white">
                   {usuarioActivo.nombre} {usuarioActivo.apellido}
                 </span>
+                . Aquí puedes rastrear tus productos.
               </p>
             )}
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/10 px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
-            <p className="text-sm text-slate-300">Pedidos registrados</p>
-            <p className="text-2xl font-bold text-white">{totalPedidos}</p>
           </div>
         </div>
 
