@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { convertToSubcurrency } from "@/app/libs/stripe";
-import { sql } from "@/app/Datalibs/database";
 
 export const runtime = "nodejs";
 
@@ -18,18 +17,6 @@ type PaymentIntentBody = {
   idCliente?: number;
   idPedidos?: number[];
   tipoEntrega?: string;
-};
-
-type PedidoMontoRow = {
-  idPedido: number;
-  subtotal: number | string;
-  costoEnvio: number | string;
-  total: number | string;
-};
-
-type PagoExistenteRow = {
-  idPago: number;
-  idPedido: number;
 };
 
 export async function POST(req: NextRequest) {
@@ -76,103 +63,6 @@ export async function POST(req: NextRequest) {
         deliveryType: tipoEntrega ?? "",
       },
     });
-
-    if (idPedidos.length > 0) {
-      const { rows: pedidoRows } = await sql<PedidoMontoRow>(
-        `
-          SELECT
-            id_pedido AS "idPedido",
-            subtotal,
-            costo_envio AS "costoEnvio",
-            total
-          FROM public.pedido
-          WHERE id_pedido = ANY($1::int[]);
-        `,
-        [idPedidos]
-      );
-
-      const montosPorPedido = new Map(
-        pedidoRows.map((row) => [
-          Number(row.idPedido),
-          Number(row.total ?? Number(row.subtotal) + Number(row.costoEnvio)),
-        ])
-      );
-
-      const { rows: pagosExistentes } = await sql<PagoExistenteRow>(
-        `
-          SELECT
-            id_pago AS "idPago",
-            id_pedido AS "idPedido"
-          FROM public.pago
-          WHERE id_pedido = ANY($1::int[]);
-        `,
-        [idPedidos]
-      );
-
-      const pagosMap = new Map(
-        pagosExistentes.map((row) => [Number(row.idPedido), Number(row.idPago)])
-      );
-
-      await Promise.all(
-        idPedidos.map(async (idPedido) => {
-          const monto = montosPorPedido.get(idPedido) ?? 0;
-          const observacion = [
-            "Stripe PaymentIntent creado",
-            Number.isInteger(idCliente) && idCliente > 0 ? `customerId=${idCliente}` : null,
-            `orderIds=${idPedidos.join(",")}`,
-            tipoEntrega ? `tipoEntrega=${tipoEntrega}` : null,
-          ]
-            .filter(Boolean)
-            .join("; ");
-
-          const idPago = pagosMap.get(idPedido);
-
-          if (idPago) {
-            await sql(
-              `
-                UPDATE public.pago
-                SET
-                  metodo_pago = $1::varchar(20),
-                  estado_pago = $2::varchar(20),
-                  monto = $3::numeric(12,2),
-                  fecha_pago = NULL,
-                  referencia_pago = $4::varchar(100),
-                  observacion = $5::text
-                WHERE id_pago = $6::integer;
-              `,
-              ["Stripe", "Pendiente", monto, paymentIntent.id, observacion, idPago]
-            );
-            return;
-          }
-
-          await sql(
-            `
-              INSERT INTO public.pago
-                (
-                  id_pedido,
-                  metodo_pago,
-                  estado_pago,
-                  monto,
-                  fecha_pago,
-                  referencia_pago,
-                  observacion
-                )
-              VALUES
-                (
-                  $1::integer,
-                  $2::varchar(20),
-                  $3::varchar(20),
-                  $4::numeric(12,2),
-                  NULL,
-                  $5::varchar(100),
-                  $6::text
-                );
-            `,
-            [idPedido, "Stripe", "Pendiente", monto, paymentIntent.id, observacion]
-          );
-        })
-      );
-    }
 
     return NextResponse.json(
       {

@@ -94,7 +94,7 @@ function Link_Roles(roleId: number | null | undefined): MenuLink[] {
   const defaultLinks: MenuLink[] = [
     { href: "/user/usuario", label: "Mi cuenta" },
     { href: "/user/usuario/compras", label: "Mis compras" },
-    { href: "/user/usuario/seguimiento", label: "Mis pedidos" },
+    { href: "/user/usuario/seguimiento", label: "Seguimiento de Pedido" },
   ];
 
   switch (roleId) {
@@ -110,7 +110,7 @@ function Link_Roles(roleId: number | null | undefined): MenuLink[] {
       return [
         ...defaultLinks,
         { href: "/user/vendedor", label: "Gestión de Ventas" },
-        { href: "/user/vendedor/pedidos", label: "Gestión de Pedidos" },
+        { href: "/user/vendedor/pedidos", label: "Pedidos de Clientes" },
       ];
     case 5:
       return [

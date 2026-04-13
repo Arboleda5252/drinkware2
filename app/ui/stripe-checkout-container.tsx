@@ -16,6 +16,7 @@ type StripeCheckoutContainerProps = {
   idCliente?: number | null;
   idPedidos?: number[];
   tipoEntrega?: string | null;
+  fechaHoraRetiro?: string | null;
 };
 
 export default function StripeCheckoutContainer({
@@ -23,6 +24,7 @@ export default function StripeCheckoutContainer({
   idCliente,
   idPedidos = [],
   tipoEntrega,
+  fechaHoraRetiro,
 }: StripeCheckoutContainerProps) {
   const [clientSecret, setClientSecret] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -100,7 +102,11 @@ export default function StripeCheckoutContainer({
         clientSecret,
       }}
     >
-      <CheckoutPage amount={amount} />
+      <CheckoutPage
+        amount={amount}
+        tipoEntrega={tipoEntrega}
+        fechaHoraRetiro={fechaHoraRetiro}
+      />
     </Elements>
   );
 }

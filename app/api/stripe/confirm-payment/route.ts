@@ -19,6 +19,16 @@ type ConfirmPaymentBody = {
 type PagoRow = {
   idPago: number;
   idPedido: number;
+  metodoPago: string;
+  referenciaPago: string | null;
+  monto: number | string;
+};
+
+type PedidoRow = {
+  idPedido: number;
+  subtotal: number | string;
+  costoEnvio: number | string;
+  total: number | string;
 };
 
 export async function POST(req: NextRequest) {
@@ -61,38 +71,141 @@ export async function POST(req: NextRequest) {
       `
         SELECT
           id_pago AS "idPago",
-          id_pedido AS "idPedido"
+          id_pedido AS "idPedido",
+          metodo_pago AS "metodoPago",
+          referencia_pago AS "referenciaPago",
+          monto
         FROM public.pago
-        WHERE referencia_pago = $1::varchar(100);
+        WHERE id_pedido = ANY($1::int[]);
       `,
-      [paymentIntent.id]
+      [orderIds]
     );
 
+    const { rows: pedidos } =
+      orderIds.length > 0
+        ? await sql<PedidoRow>(
+            `
+              SELECT
+                id_pedido AS "idPedido",
+                subtotal,
+                costo_envio AS "costoEnvio",
+                total
+              FROM public.pedido
+              WHERE id_pedido = ANY($1::int[]);
+            `,
+            [orderIds]
+          )
+        : { rows: [] as PedidoRow[] };
+
+    const montosPorPedido = new Map(
+      pedidos.map((row) => [
+        Number(row.idPedido),
+        Number(row.subtotal),
+      ])
+    );
+
+    const pagosPorPedido = new Map<number, PagoRow[]>();
+    for (const pago of pagos) {
+      const pedidoId = Number(pago.idPedido);
+      const actuales = pagosPorPedido.get(pedidoId) ?? [];
+      actuales.push(pago);
+      pagosPorPedido.set(pedidoId, actuales);
+    }
+
     await Promise.all(
-      pagos.map((pago) =>
-        sql(
+      orderIds.map(async (idPedido) => {
+        const pagosDelPedido = pagosPorPedido.get(idPedido) ?? [];
+        const pagoConservado =
+          pagosDelPedido.find((pago) => pago.metodoPago !== "Stripe") ??
+          pagosDelPedido.find((pago) => pago.referenciaPago === paymentIntent.id) ??
+          pagosDelPedido[0] ??
+          null;
+
+        const pagosDuplicados = pagosDelPedido.filter(
+          (pago) => pago.idPago !== pagoConservado?.idPago
+        );
+
+        if (pagosDuplicados.length > 0) {
+          await sql(
+            `
+              DELETE FROM public.pago
+              WHERE id_pago = ANY($1::int[]);
+            `,
+            [pagosDuplicados.map((pago) => Number(pago.idPago))]
+          );
+        }
+
+        const metodoPagoFinal =
+          paymentIntent.status === "succeeded" ? "Tarjeta" : "Stripe";
+        const observacion =
+          paymentIntent.status === "succeeded"
+            ? "Pago realizado con Stripe"
+            : [
+                "Stripe confirmado",
+                `status=${paymentIntent.status}`,
+                `paymentIntentId=${paymentIntent.id}`,
+              ].join("; ");
+
+        if (pagoConservado) {
+          await sql(
+            `
+              UPDATE public.pago
+              SET
+                metodo_pago = $1::varchar(20),
+                estado_pago = $2::varchar(20),
+                monto = $3::numeric(12,2),
+                fecha_pago = $4::timestamp,
+                referencia_pago = $5::varchar(100),
+                observacion = $6::text
+              WHERE id_pago = $7::integer;
+            `,
+            [
+              metodoPagoFinal,
+              estadoPago,
+              montosPorPedido.get(idPedido) ?? Number(pagoConservado.monto ?? 0),
+              fechaPago,
+              paymentIntent.id,
+              observacion,
+              pagoConservado.idPago,
+            ]
+          );
+          return;
+        }
+
+        await sql(
           `
-            UPDATE public.pago
-            SET
-              metodo_pago = $1::varchar(20),
-              estado_pago = $2::varchar(20),
-              fecha_pago = $3::timestamp,
-              observacion = $4::text
-            WHERE id_pago = $5::integer;
+            INSERT INTO public.pago
+              (
+                id_pedido,
+                metodo_pago,
+                estado_pago,
+                monto,
+                fecha_pago,
+                referencia_pago,
+                observacion
+              )
+            VALUES
+              (
+                $1::integer,
+                $2::varchar(20),
+                $3::varchar(20),
+                $4::numeric(12,2),
+                $5::timestamp,
+                $6::varchar(100),
+                $7::text
+              );
           `,
           [
-            paymentIntent.status === "succeeded" ? "Tarjeta" : "Stripe",
+            idPedido,
+            metodoPagoFinal,
             estadoPago,
+            montosPorPedido.get(idPedido) ?? 0,
             fechaPago,
-            [
-              "Stripe confirmado",
-              `status=${paymentIntent.status}`,
-              `paymentIntentId=${paymentIntent.id}`,
-            ].join("; "),
-            pago.idPago,
+            paymentIntent.id,
+            observacion,
           ]
-        )
-      )
+        );
+      })
     );
 
     if (paymentIntent.status === "succeeded" && orderIds.length > 0) {
