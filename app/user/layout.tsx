@@ -105,6 +105,7 @@ function Link_Roles(roleId: number | null | undefined): MenuLink[] {
         { href: "/user/admin", label: "Gestión de usuarios" },
         { href: "/user/admin/products", label: "Gestión de productos" },
         { href: "/user/vendedor", label: "Gestión de Ventas" },
+        { href: "/user/admin/informes", label: "Gestión de Informes" },
       ];
     case 3:
       return [
