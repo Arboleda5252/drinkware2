@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const PUBLIC_PATHS = new Set(["/", "/nosotros", "/contactenos", "/productos"]);
-const PUBLIC_PREFIXES = ["/account"];
+const PUBLIC_PREFIXES = ["/account", "/checkout"];
 const PRIVATE_PREFIXES = ["/user"];
 const PUBLIC_FILE = /\.(?:js|css|json|svg|png|jpg|jpeg|gif|webp|ico|txt|xml|woff2?)$/i;
 

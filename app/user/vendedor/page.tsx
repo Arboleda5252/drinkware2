@@ -7,7 +7,16 @@ import { InventoryModal } from "./Modal_Inventario";
 import { OrderSummary } from "./Modal_Venta";
 import { PageHeader } from "./PageHeader";
 import { ProductSelector } from "./ProductSelector";
+import { PaymentLinkModal } from "./PaymentLinkModal";
 import type { CartItem, FeedbackState, InventorioProducto } from "./types";
+
+type CheckoutLinkData = {
+  pedidoId: number;
+  pagoId: number;
+  cliente: string;
+  total: number;
+  checkoutUrl: string;
+};
 
 export default function Page() {
   const [customerName, setCustomerName] = useState("");
@@ -38,6 +47,7 @@ export default function Page() {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [vendedorId, setVendedorId] = useState<number | null>(null);
   const [vendedorError, setVendedorError] = useState("");
+  const [checkoutLinkData, setCheckoutLinkData] = useState<CheckoutLinkData | null>(null);
   const productSearchRef = useRef<HTMLDivElement | null>(null);
   const productInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -254,6 +264,50 @@ export default function Page() {
     }
   }, []);
 
+  const resetSaleForm = useCallback(() => {
+    setCartItems([]);
+    setQuantity(null);
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerCity("");
+    setCustomerDocument("");
+    setCustomerAddress("");
+    setPaymentType("");
+    setPickupDateTime("");
+    setCustomerUserId(null);
+    setDocumentLookupError("");
+    setDocumentLookupMessage("");
+  }, []);
+
+  const createCheckoutSession = useCallback(
+    async (pedidoId: number, pagoId: number) => {
+      const response = await fetch("/api/stripe/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pedidoId, pagoId }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error ?? "No fue posible generar el link de pago.");
+      }
+
+      const checkoutUrl =
+        typeof payload?.data?.url === "string" ? payload.data.url.trim() : "";
+
+      if (!checkoutUrl) {
+        throw new Error("Stripe no devolvio una URL valida para la sesion.");
+      }
+
+      return {
+        checkoutUrl,
+        sessionId:
+          typeof payload?.data?.sessionId === "string" ? payload.data.sessionId : null,
+      };
+    },
+    []
+  );
+
   const registrarVenta = async () => {
     const requiereDatosDomicilio = deliveryType === "Domicilio";
     const faltanDatosBase =
@@ -316,6 +370,7 @@ export default function Page() {
     const paymentTypeValue = paymentType.trim();
     const cliente = customerNameValue;
     const detallesRegistrados: Array<{ productId: number; quantity: number }> = [];
+    let pedidoId: number | null = null;
 
     try {
       const estadoPedido = paymentTypeValue === "efectivo" ? "Entregado" : "Pendiente";
@@ -349,7 +404,7 @@ export default function Page() {
         throw new Error(pedidoData?.error ?? "No fue posible crear el pedido.");
       }
 
-      const pedidoId = Number(pedidoData?.data?.idPedido);
+      pedidoId = Number(pedidoData?.data?.idPedido);
       if (!Number.isInteger(pedidoId) || pedidoId <= 0) {
         throw new Error("La API de pedidos no devolvio un id_pedido valido.");
       }
@@ -439,18 +494,48 @@ export default function Page() {
         throw new Error(entregaData?.error ?? "No fue posible crear la entrega.");
       }
 
-      setCartItems([]);
-      setQuantity(null);
-      setCustomerName("");
-      setCustomerPhone("");
-      setCustomerCity("");
-      setCustomerDocument("");
-      setCustomerAddress("");
-      setPaymentType("");
-      setPickupDateTime("");
-      setCustomerUserId(null);
-      setDocumentLookupError("");
-      setDocumentLookupMessage("");
+      if (paymentTypeValue === "pago_online") {
+        const pagoRes = await fetch("/api/pago", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            idPedido: Number(pedidoId),
+            metodoPago: "Pago Online",
+            estadoPago: "Pendiente",
+            monto: Number(totalVenta),
+            fechaPago: null,
+            observacion: "Venta creada por vendedor. Link de pago pendiente de envio.",
+          }),
+        });
+        const pagoData = await pagoRes.json().catch(() => ({}));
+        if (!pagoRes.ok || !pagoData?.ok) {
+          throw new Error(pagoData?.error ?? "No fue posible registrar el pago pendiente.");
+        }
+
+        const pagoId = Number(pagoData?.data?.idPago);
+        if (!Number.isInteger(pagoId) || pagoId <= 0) {
+          throw new Error("La API de pago no devolvio un id_pago valido.");
+        }
+
+        const { checkoutUrl } = await createCheckoutSession(Number(pedidoId), pagoId);
+
+        resetSaleForm();
+        setCheckoutLinkData({
+          pedidoId: Number(pedidoId),
+          pagoId,
+          cliente,
+          total: totalVenta,
+          checkoutUrl,
+        });
+        setFeedback({
+          type: "success",
+          message: `Pedido #${pedidoId} registrado para ${cliente}. Comparte el link de pago para completar la venta.`,
+        });
+        await fetchInventoryProducts();
+        return;
+      }
+
+      resetSaleForm();
       setFeedback({
         type: "success",
         message: `Pedido #${pedidoId} registrado para ${cliente}. Total: $${totalVenta.toLocaleString("es-CO")}`,
@@ -470,7 +555,12 @@ export default function Page() {
 
       setFeedback({
         type: "error",
-        message: error instanceof Error ? error.message : "Error inesperado al registrar la venta.",
+        message:
+          error instanceof Error
+            ? pedidoId && paymentTypeValue === "pago_online"
+              ? `${error.message} El pedido #${pedidoId} quedo creado en estado pendiente.`
+              : error.message
+            : "Error inesperado al registrar la venta.",
       });
     } finally {
       setRegistering(false);
@@ -802,6 +892,17 @@ export default function Page() {
           onRetry={() => {
             void fetchInventoryProducts();
           }}
+        />
+      )}
+
+      {checkoutLinkData && (
+        <PaymentLinkModal
+          pedidoId={checkoutLinkData.pedidoId}
+          pagoId={checkoutLinkData.pagoId}
+          cliente={checkoutLinkData.cliente}
+          total={checkoutLinkData.total}
+          checkoutUrl={checkoutLinkData.checkoutUrl}
+          onClose={() => setCheckoutLinkData(null)}
         />
       )}
     </section>
