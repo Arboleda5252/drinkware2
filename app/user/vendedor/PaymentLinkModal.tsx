@@ -60,11 +60,8 @@ export function PaymentLinkModal({
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">
               Link de pago
             </p>
-            <h2 className="mt-2 text-2xl font-bold text-slate-900">
+            <p className="mt-2 text-2xl font-bold text-slate-900">
               Pedido #{pedidoId}
-            </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Pago #{pagoId} en estado pendiente para {cliente || "cliente"}.
             </p>
           </div>
           <button
@@ -72,19 +69,19 @@ export function PaymentLinkModal({
             onClick={onClose}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
           >
-            Cerrar
+            X
           </button>
         </div>
 
         <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-          <p className="text-sm font-semibold text-slate-800">Total a cobrar</p>
+          <p className="text-sm font-semibold text-slate-800">Total</p>
           <p className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
             {formatoCOP.format(total)}
           </p>
         </div>
 
         <div className="mt-6 rounded-2xl border border-slate-200 p-4">
-          <p className="text-sm font-semibold text-slate-800">URL de Stripe Checkout</p>
+          <p className="text-sm font-semibold text-slate-800">URL de Stripe</p>
           <a
             href={checkoutUrl}
             target="_blank"
@@ -96,14 +93,6 @@ export function PaymentLinkModal({
         </div>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <a
-            href={checkoutUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
-          >
-            Abrir link
-          </a>
           <button
             type="button"
             onClick={() => void handleCopy()}
@@ -111,22 +100,7 @@ export function PaymentLinkModal({
           >
             Copiar link
           </button>
-          <a
-            href={emailHref}
-            className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            Enviar por correo
-          </a>
         </div>
-
-        {copyState === "success" && (
-          <p className="mt-4 text-sm text-emerald-700">Link copiado al portapapeles.</p>
-        )}
-        {copyState === "error" && (
-          <p className="mt-4 text-sm text-rose-700">
-            No fue posible copiar el link automaticamente.
-          </p>
-        )}
       </div>
     </div>
   );

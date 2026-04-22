@@ -373,9 +373,14 @@ export default function Page() {
     let pedidoId: number | null = null;
 
     try {
-      const estadoPedido = paymentTypeValue === "efectivo" ? "Entregado" : "Pendiente";
+      const estadoPedido =
+        deliveryType === "Retiro_tienda"
+          ? "Pendiente"
+          : paymentTypeValue === "efectivo"
+            ? "Entregado"
+            : "Pendiente";
       const paymentTypeLabelMap: Record<string, string> = {
-        efectivo: "Efectivo",
+        efectivo: deliveryType === "Retiro_tienda" ? "Pago en tienda" : "Efectivo",
         contraentrega: "Contraentrega",
         pago_online: "Pago Online",
       };
@@ -494,17 +499,25 @@ export default function Page() {
         throw new Error(entregaData?.error ?? "No fue posible crear la entrega.");
       }
 
-      if (paymentTypeValue === "pago_online") {
+      const paymentMethodToPersist =
+        paymentTypeValue === "efectivo"
+          ? "Pago en Tienda"
+          : paymentTypeLabel;
+
+      if (paymentMethodToPersist) {
         const pagoRes = await fetch("/api/pago", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPedido: Number(pedidoId),
-            metodoPago: "Pago Online",
+            metodoPago: paymentMethodToPersist,
             estadoPago: "Pendiente",
             monto: Number(totalVenta),
             fechaPago: null,
-            observacion: "Venta creada por vendedor. Link de pago pendiente de envio.",
+            observacion:
+              paymentTypeValue === "pago_online"
+                ? "Venta creada por vendedor. Link de pago pendiente de envio."
+                : null,
           }),
         });
         const pagoData = await pagoRes.json().catch(() => ({}));
@@ -512,33 +525,35 @@ export default function Page() {
           throw new Error(pagoData?.error ?? "No fue posible registrar el pago pendiente.");
         }
 
-        const pagoId = Number(pagoData?.data?.idPago);
-        if (!Number.isInteger(pagoId) || pagoId <= 0) {
-          throw new Error("La API de pago no devolvio un id_pago valido.");
+        if (paymentTypeValue === "pago_online") {
+          const pagoId = Number(pagoData?.data?.idPago);
+          if (!Number.isInteger(pagoId) || pagoId <= 0) {
+            throw new Error("La API de pago no devolvio un id_pago valido.");
+          }
+
+          const { checkoutUrl } = await createCheckoutSession(Number(pedidoId), pagoId);
+
+          resetSaleForm();
+          setCheckoutLinkData({
+            pedidoId: Number(pedidoId),
+            pagoId,
+            cliente,
+            total: totalVenta,
+            checkoutUrl,
+          });
+          setFeedback({
+            type: "success",
+            message: `Pedido #${pedidoId} registrado`,
+          });
+          await fetchInventoryProducts();
+          return;
         }
-
-        const { checkoutUrl } = await createCheckoutSession(Number(pedidoId), pagoId);
-
-        resetSaleForm();
-        setCheckoutLinkData({
-          pedidoId: Number(pedidoId),
-          pagoId,
-          cliente,
-          total: totalVenta,
-          checkoutUrl,
-        });
-        setFeedback({
-          type: "success",
-          message: `Pedido #${pedidoId} registrado para ${cliente}. Comparte el link de pago para completar la venta.`,
-        });
-        await fetchInventoryProducts();
-        return;
       }
 
       resetSaleForm();
       setFeedback({
         type: "success",
-        message: `Pedido #${pedidoId} registrado para ${cliente}. Total: $${totalVenta.toLocaleString("es-CO")}`,
+        message: `Pedido #${pedidoId} registrado. Total: $${totalVenta.toLocaleString("es-CO")}`,
       });
       await fetchInventoryProducts();
     } catch (error) {
@@ -797,87 +812,106 @@ export default function Page() {
     }
   }, [deliveryType, pickupDateTime]);
 
+  useEffect(() => {
+    const allowedPaymentTypes =
+      deliveryType === "Retiro_tienda"
+        ? new Set(["efectivo", "pago_online"])
+        : new Set(["contraentrega", "pago_online"]);
+
+    if (paymentType && !allowedPaymentTypes.has(paymentType)) {
+      setPaymentType("");
+    }
+  }, [deliveryType, paymentType]);
+
   return (
-    <section className="w-full bg-slate-50 py-10">
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 rounded-2xl bg-white p-8 text-[15px] md:text-base shadow-lg">
-        <PageHeader onOpenInventory={handleInventoryButtonClick} />
+    <section className="relative w-full overflow-hidden bg-black py-12">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.06),transparent_32%)]" />
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95" />
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <CustomerForm
-            customerHasDocument={customerHasDocument}
-            customerDocument={customerDocument}
-            customerName={customerName}
-            customerPhone={customerPhone}
-            customerCity={customerCity}
-            customerAddress={customerAddress}
-            documentLookupLoading={documentLookupLoading}
-            documentLookupError={documentLookupError}
-            documentLookupMessage={documentLookupMessage}
-            onDocumentModeChange={handleDocumentModeChange}
-            onCustomerDocumentChange={(value) => {
-              setCustomerDocument(value);
-              if (documentLookupError) {
-                setDocumentLookupError("");
-              }
-              if (documentLookupMessage) {
-                setDocumentLookupMessage("");
-              }
-              setCustomerUserId(null);
-            }}
-            onDocumentBlur={() => {
-              if (customerHasDocument) {
-                void buscarClientePorDocumento();
-              }
-            }}
-            onCustomerNameChange={setCustomerName}
-            onCustomerPhoneChange={setCustomerPhone}
-            onCustomerCityChange={setCustomerCity}
-            onCustomerAddressChange={setCustomerAddress}
-          />
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="absolute left-6 top-10 h-28 w-28 rounded-full bg-sky-400/15 blur-3xl" />
+        <div className="absolute bottom-8 right-8 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
 
-          <ProductSelector
-            productSearchRef={productSearchRef}
-            productInputRef={productInputRef}
-            productSearchTerm={productSearchTerm}
-            selectedProductId={selectedProductId}
-            selectedProductLabel={selectedProductLabel}
-            inventoryLoading={inventoryLoading}
-            inventoryError={inventoryError}
-            stockError={stockError}
-            quantity={quantity}
-            inventorioProductos={inventorioProductos}
-            productSearchResults={productSearchResults}
-            productSearchHasMore={productSearchHasMore}
-            showProductSuggestions={showProductSuggestions}
-            seleccionarProducto={seleccionarProducto}
-            seleccionarProductoCart={seleccionarProductoCart}
-            onProductSearchTermChange={setProductSearchTerm}
-            onShowProductSuggestionsChange={setShowProductSuggestions}
-            onSelectedProductIdChange={setSelectedProductId}
-            onHandleProductSelection={handleProductSelection}
-            onClearProductSelection={clearProductSelection}
-            onQuantityChange={setQuantity}
-            onAddProduct={addProduct}
+        <div className="relative flex flex-col gap-8 rounded-[2rem] border border-white/10 bg-white p-8 text-[15px] md:text-base shadow-[0_24px_80px_rgba(2,6,23,0.45)] lg:p-10">
+          <PageHeader onOpenInventory={handleInventoryButtonClick} />
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <CustomerForm
+              customerHasDocument={customerHasDocument}
+              customerDocument={customerDocument}
+              customerName={customerName}
+              customerPhone={customerPhone}
+              customerCity={customerCity}
+              customerAddress={customerAddress}
+              documentLookupLoading={documentLookupLoading}
+              documentLookupError={documentLookupError}
+              documentLookupMessage={documentLookupMessage}
+              onDocumentModeChange={handleDocumentModeChange}
+              onCustomerDocumentChange={(value) => {
+                setCustomerDocument(value);
+                if (documentLookupError) {
+                  setDocumentLookupError("");
+                }
+                if (documentLookupMessage) {
+                  setDocumentLookupMessage("");
+                }
+                setCustomerUserId(null);
+              }}
+              onDocumentBlur={() => {
+                if (customerHasDocument) {
+                  void buscarClientePorDocumento();
+                }
+              }}
+              onCustomerNameChange={setCustomerName}
+              onCustomerPhoneChange={setCustomerPhone}
+              onCustomerCityChange={setCustomerCity}
+              onCustomerAddressChange={setCustomerAddress}
+            />
+
+            <ProductSelector
+              productSearchRef={productSearchRef}
+              productInputRef={productInputRef}
+              productSearchTerm={productSearchTerm}
+              selectedProductId={selectedProductId}
+              selectedProductLabel={selectedProductLabel}
+              inventoryLoading={inventoryLoading}
+              inventoryError={inventoryError}
+              stockError={stockError}
+              quantity={quantity}
+              inventorioProductos={inventorioProductos}
+              productSearchResults={productSearchResults}
+              productSearchHasMore={productSearchHasMore}
+              showProductSuggestions={showProductSuggestions}
+              seleccionarProducto={seleccionarProducto}
+              seleccionarProductoCart={seleccionarProductoCart}
+              onProductSearchTermChange={setProductSearchTerm}
+              onShowProductSuggestionsChange={setShowProductSuggestions}
+              onSelectedProductIdChange={setSelectedProductId}
+              onHandleProductSelection={handleProductSelection}
+              onClearProductSelection={clearProductSelection}
+              onQuantityChange={setQuantity}
+              onAddProduct={addProduct}
+            />
+          </div>
+
+          <OrderSummary
+            detalleItems={detalleItems}
+            cartItems={cartItems}
+            deliveryType={deliveryType}
+            paymentType={paymentType}
+            pickupDateTime={pickupDateTime}
+            pickupMinDateTime={pickupMinDateTime}
+            totalAmount={totalAmount}
+            registering={registering}
+            vendedorError={vendedorError}
+            feedback={feedback}
+            onRemoveCartItem={removeCartItem}
+            onDeliveryTypeChange={setDeliveryType}
+            onPaymentTypeChange={setPaymentType}
+            onPickupDateTimeChange={setPickupDateTime}
+            onRegisterSale={registrarVenta}
           />
         </div>
-
-        <OrderSummary
-          detalleItems={detalleItems}
-          cartItems={cartItems}
-          deliveryType={deliveryType}
-          paymentType={paymentType}
-          pickupDateTime={pickupDateTime}
-          pickupMinDateTime={pickupMinDateTime}
-          totalAmount={totalAmount}
-          registering={registering}
-          vendedorError={vendedorError}
-          feedback={feedback}
-          onRemoveCartItem={removeCartItem}
-          onDeliveryTypeChange={setDeliveryType}
-          onPaymentTypeChange={setPaymentType}
-          onPickupDateTimeChange={setPickupDateTime}
-          onRegisterSale={registrarVenta}
-        />
       </div>
 
       {showInventoryModal && (
