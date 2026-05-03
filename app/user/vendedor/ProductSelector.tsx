@@ -204,7 +204,7 @@ export function ProductSelector({
           disabled={!selectedProductId || !!stockError || inventorioProductos.length === 0}
           className="w-full rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          Anadir al pedido
+          Añadir al pedido
         </button>
       </div>
     </div>

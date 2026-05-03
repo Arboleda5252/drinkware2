@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FaPen, FaTrash } from "react-icons/fa";
-import MercadoPagoWalletButtonEnv from "@/app/ui/mercadopago-wallet-button-env";
+import StripeCheckoutContainer from "@/app/ui/stripe-checkout-container";
 
 type Usuario = {
   id: number;
@@ -90,22 +90,6 @@ type Pago = {
   observacion: string | null;
 };
 
-type PreferenceResponseData = {
-  id: string | null;
-  preference_id: string | null;
-  init_point: string | null;
-  sandbox_init_point: string | null;
-  idPedidos: number[];
-};
-
-type PreferenceRequestItem = {
-  id: string;
-  title: string;
-  quantity: number;
-  currency_id: string;
-  unit_price: number;
-};
-
 const formatoCOP = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
@@ -132,7 +116,7 @@ export default function Page() {
   const [modalPagoAbierto, setModalPagoAbierto] = useState(false);
   const [tipoEntrega, setTipoEntrega] = useState<"Domicilio" | "Retiro_tienda">("Domicilio");
   const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState<
-    "Pago_Online" | "Contraentrega" | "Efectivo"
+    "Contraentrega" | "Efectivo" | "Stripe"
   >("Contraentrega");
   const [fechaHoraRetiro, setFechaHoraRetiro] = useState("");
   const [entregarOtraDireccion, setEntregarOtraDireccion] = useState(false);
@@ -140,10 +124,6 @@ export default function Page() {
   const [telefonoContacto, setTelefonoContacto] = useState("");
   const [direccionEntrega, setDireccionEntrega] = useState("");
   const [ciudadEntrega, setCiudadEntrega] = useState("");
-  const [preferenceId, setPreferenceId] = useState<string | null>(null);
-  const [preferencePedidosKey, setPreferencePedidosKey] = useState<string | null>(null);
-  const [preferenceIntentadaKey, setPreferenceIntentadaKey] = useState<string | null>(null);
-  const [generandoPreferencia, setGenerandoPreferencia] = useState(false);
 
   const fetchJson = useCallback(async <T,>(url: string, init?: RequestInit) => {
     const response = await fetch(url, {
@@ -437,6 +417,23 @@ export default function Page() {
 
   const estadoResumen = carrito.length === 0 && !cargando ? "Tu carrito esta vacio." : null;
 
+  const construirUrlExito = useCallback(
+    (metodoPago: "Contraentrega" | "Efectivo" | "Tarjeta") => {
+      const params = new URLSearchParams({
+        entrega: tipoEntrega,
+        metodo: metodoPago,
+        total: String(resumen.subtotal),
+      });
+
+      if (tipoEntrega === "Retiro_tienda" && fechaHoraRetiro) {
+        params.set("retiro", fechaHoraRetiro);
+      }
+
+      return `/user/usuario/compras/exito?${params.toString()}`;
+    },
+    [fechaHoraRetiro, resumen.subtotal, tipoEntrega]
+  );
+
   const guardarEntregaYContinuar = useCallback(async () => {
     if (carrito.length === 0 || confirmandoPedido) {
       return;
@@ -590,8 +587,8 @@ export default function Page() {
             monto,
             fechaPago: null,
             observacion:
-              metodoPagoSeleccionado === "Pago_Online"
-                ? "Pago online gestionado por Mercado Pago"
+              metodoPagoSeleccionado === "Stripe"
+                ? "Pago online pendiente de integracion final con Stripe"
                 : null,
           };
 
@@ -623,7 +620,8 @@ export default function Page() {
                   tipoEntrega,
                   estadoPedido:
                     (tipoEntrega === "Retiro_tienda" && metodoPagoSeleccionado === "Efectivo") ||
-                    (tipoEntrega === "Domicilio" && metodoPagoSeleccionado === "Contraentrega")
+                    (tipoEntrega === "Domicilio" &&
+                      metodoPagoSeleccionado === "Contraentrega")
                       ? "Confirmado"
                       : "Pendiente",
                 },
@@ -635,6 +633,9 @@ export default function Page() {
       setCarrito([]);
       setModalPagoAbierto(false);
       setAccionExito("Pago configurado correctamente.");
+      router.push(
+        construirUrlExito(metodoPagoSeleccionado === "Stripe" ? "Tarjeta" : metodoPagoSeleccionado)
+      );
     } catch (err) {
       setAccionError(
         err instanceof Error ? err.message : "No se pudo confirmar la informacion de pago."
@@ -642,144 +643,30 @@ export default function Page() {
     } finally {
       setConfirmandoPago(false);
     }
-  }, [actualizarPedido, carrito, confirmandoPago, fetchJson, metodoPagoSeleccionado, tipoEntrega]);
-
-  const prepararPagoOnline = useCallback(async () => {
-    if (
-      carrito.length === 0 ||
-      confirmandoPago ||
-      generandoPreferencia ||
-      idsPedidosCarrito.length === 0
-    ) {
-      return;
-    }
-
-    const currentKey = `${tipoEntrega}:${idsPedidosCarrito.join(",")}`;
-    if (preferenceId && preferencePedidosKey === currentKey) {
-      return;
-    }
-    if (preferenceIntentadaKey === currentKey) {
-      return;
-    }
-
-    const itemsPreferencia: PreferenceRequestItem[] = carrito.map((item) => ({
-      id: `${item.pedido.idPedido}-${item.detalle.idDetallePedido}`,
-      title: item.producto?.nombre ?? `Producto ${item.detalle.idProducto}`,
-      quantity: item.detalle.cantidad,
-      currency_id: "COP",
-      unit_price: item.detalle.precioUnitario,
-    }));
-
-    setAccionError(null);
-    setAccionExito(null);
-    setGenerandoPreferencia(true);
-    setPreferenceIntentadaKey(currentKey);
-
-    try {
-      const pagos = await fetchJson<Pago[]>("/api/pago");
-
-      await Promise.all(
-        idsPedidosCarrito.map(async (pedidoId) => {
-          const monto = carrito
-            .filter((item) => item.pedido.idPedido === pedidoId)
-            .reduce((acc, item) => acc + item.detalle.precioUnitario * item.detalle.cantidad, 0);
-
-          const payloadPago: Record<string, unknown> = {
-            idPedido: pedidoId,
-            metodoPago: "Pago_Online",
-            estadoPago: "Pendiente",
-            monto,
-            fechaPago: null,
-            observacion: "Pago online gestionado por Mercado Pago",
-          };
-
-          const pagoExistente = pagos.find((pago) => Number(pago.idPedido) === pedidoId);
-          if (pagoExistente) {
-            await fetchJson<Pago>(`/api/pago/${pagoExistente.idPago}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payloadPago),
-            });
-            return;
-          }
-
-          await fetchJson<Pago>("/api/pago", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payloadPago),
-          });
-        })
-      );
-
-      const preference = await fetchJson<PreferenceResponseData>("/api/mercadopago/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPedidos: idsPedidosCarrito,
-          items: itemsPreferencia,
-          external_reference: `pedido-${idsPedidosCarrito.join("-")}`,
-        }),
-      });
-
-      if (!preference.preference_id) {
-        throw new Error("Mercado Pago no devolvio un preference_id valido.");
-      }
-
-      setPreferenceId(preference.preference_id);
-      setPreferencePedidosKey(currentKey);
-    } catch (err) {
-      setPreferenceId(null);
-      setPreferencePedidosKey(null);
-      setAccionError(
-        err instanceof Error ? err.message : "No se pudo preparar el pago online."
-      );
-    } finally {
-      setGenerandoPreferencia(false);
-    }
   }, [
+    actualizarPedido,
     carrito,
     confirmandoPago,
+    construirUrlExito,
     fetchJson,
-    generandoPreferencia,
-    idsPedidosCarrito,
-    preferenceIntentadaKey,
-    preferenceId,
-    preferencePedidosKey,
+    metodoPagoSeleccionado,
+    router,
     tipoEntrega,
   ]);
 
-  useEffect(() => {
-    if (!modalPagoAbierto) {
-      setPreferenceId(null);
-      setPreferencePedidosKey(null);
-      setPreferenceIntentadaKey(null);
-      setGenerandoPreferencia(false);
-      return;
-    }
-
-    if (metodoPagoSeleccionado !== "Pago_Online") {
-      setPreferenceId(null);
-      setPreferencePedidosKey(null);
-      setPreferenceIntentadaKey(null);
-      return;
-    }
-
-    void prepararPagoOnline();
-  }, [metodoPagoSeleccionado, modalPagoAbierto, prepararPagoOnline]);
-
   return (
-    <main className="min-h-screen bg-gray-50 px-4 py-10">
+    <main className="min-h-screen px-4 py-10 text-white">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 lg:flex-row">
         <section className="flex-1 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="flex items-center gap-2 text-3xl font-bold text-gray-900">
+              <h1 className="flex items-center gap-2 text-3xl font-bold text-white">
                 Carrito de Compras
               </h1>
               {usuarioActivo && (
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-slate-300">
                   Compras de{" "}
-                  <span className="font-semibold text-gray-700">
+                  <span className="font-semibold text-white">
                     {usuarioActivo.nombre} {usuarioActivo.apellido}
                   </span>
                 </p>
@@ -790,7 +677,7 @@ export default function Page() {
                 type="button"
                 onClick={() => void vaciarCarrito()}
                 disabled={cargando || vaciando || carrito.length === 0}
-                className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <FaTrash />
                 Vaciar carrito
@@ -799,18 +686,18 @@ export default function Page() {
           </div>
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 p-4 text-sm text-rose-100 shadow-[0_20px_60px_rgba(0,0,0,0.25)] backdrop-blur-md">
               {error}
             </div>
           )}
 
           {accionError && !modalPedidoAbierto && !modalPagoAbierto && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+            <div className="rounded-2xl border border-amber-300/30 bg-amber-500/10 p-4 text-sm text-amber-100 shadow-[0_20px_60px_rgba(0,0,0,0.25)] backdrop-blur-md">
               {accionError}
             </div>
           )}
           {accionExito && (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            <div className="rounded-2xl border border-emerald-300/30 bg-emerald-500/10 p-4 text-sm text-emerald-100 shadow-[0_20px_60px_rgba(0,0,0,0.25)] backdrop-blur-md">
               {accionExito}
             </div>
           )}
@@ -820,13 +707,39 @@ export default function Page() {
               {Array.from({ length: 2 }).map((_, index) => (
                 <div
                   key={index}
-                  className="h-40 animate-pulse rounded-2xl bg-white shadow-sm ring-1 ring-black/5"
+                  className="h-40 animate-pulse rounded-3xl border border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.3)] backdrop-blur-md"
                 />
               ))}
             </div>
           ) : estadoResumen ? (
-            <div className="rounded-2xl bg-white p-10 text-center text-gray-500 shadow-sm ring-1 ring-black/5">
-              {estadoResumen}
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-10 text-center shadow-[0_25px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-14">
+              <div className="mx-auto flex max-w-xl flex-col items-center">
+                <div className="rounded-full border-4 border-sky-300/30 bg-white/5 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                  <Image
+                    src="/img/corona.jpg"
+                    alt="Descubre productos destacados"
+                    width={180}
+                    height={180}
+                    className="h-40 w-40 rounded-full object-cover sm:h-44 sm:w-44"
+                  />
+                </div>
+                <p className="mt-8 text-sm font-semibold uppercase tracking-[0.3em] text-sky-300">
+                  Mi carrito esta vacio
+                </p>
+                <h2 className="mt-4 text-3xl font-extrabold text-white sm:text-4xl">
+                  Nada por aqui todavia.
+                </h2>
+                <p className="mt-3 max-w-lg text-lg text-slate-300">
+                  Descubre descuentos y llena tu carrito.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push("/productos")}
+                  className="mt-8 rounded-2xl bg-sky-500 px-8 py-3 text-base font-semibold text-slate-950 transition hover:bg-sky-400"
+                >
+                  Ir a Productos
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -839,9 +752,9 @@ export default function Page() {
                 return (
                   <article
                     key={item.detalle.idDetallePedido}
-                    className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 sm:flex-row sm:items-center"
+                    className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/10 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.3)] backdrop-blur-md sm:flex-row sm:items-center"
                   >
-                    <div className="flex items-center justify-center rounded-xl bg-gray-100 p-2">
+                    <div className="flex items-center justify-center rounded-2xl bg-black/20 p-2 ring-1 ring-white/10">
                       <Image
                         src={imagen}
                         alt={item.producto?.nombre ?? "Producto sin nombre"}
@@ -852,16 +765,16 @@ export default function Page() {
                     </div>
 
                     <div className="flex flex-1 flex-col gap-2">
-                      <h2 className="text-lg font-semibold text-gray-900">
+                      <h2 className="text-lg font-semibold text-white">
                         {item.producto?.nombre ?? "Producto sin nombre"}
                       </h2>
 
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-slate-300">
                         Categoria: {item.producto?.categoria ?? "Sin categoria"} | Estado del
                         producto: {item.producto?.estados ?? "Sin estado"}
                       </p>
 
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-slate-400">
                         Pedido #{item.pedido.idPedido} | Creado el{" "}
                         {new Date(item.pedido.fechaCreacion).toLocaleDateString()}
                       </p>
@@ -869,18 +782,18 @@ export default function Page() {
 
                     <div className="flex flex-col items-end gap-3">
                       <div className="text-right">
-                        <p className="text-base font-semibold text-gray-900">{precioUnitario}</p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-base font-semibold text-white">{precioUnitario}</p>
+                        <p className="text-sm text-slate-400">
                           x {item.detalle.cantidad} unidad
                           {item.detalle.cantidad > 1 ? "es" : ""}
                         </p>
                       </div>
-                      <p className="text-xl font-bold text-gray-900">{subtotal}</p>
+                      <p className="text-xl font-bold text-white">{subtotal}</p>
                       <button
                         type="button"
                         onClick={() => void eliminarProducto(item)}
                         disabled={eliminandoId === item.detalle.idDetallePedido || vaciando}
-                        className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <FaTrash />
                         {eliminandoId === item.detalle.idDetallePedido ? "Eliminando..." : "Eliminar"}
@@ -894,9 +807,9 @@ export default function Page() {
         </section>
 
         <aside className="w-full lg:w-80">
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5">
-            <h2 className="text-lg font-semibold text-gray-900">Resumen del pedido</h2>
-            <div className="mt-4 space-y-3 text-sm text-gray-600">
+          <div className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
+            <h2 className="text-lg font-semibold text-white">Resumen del pedido</h2>
+            <div className="mt-4 space-y-3 text-sm text-slate-300">
               <div className="flex items-center justify-between">
                 <span>Productos</span>
                 <span>{resumen.totalProductos}</span>
@@ -907,12 +820,20 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="mt-5 border-t border-gray-100 pt-5">
-              <div className="flex items-center justify-between text-xl font-bold text-gray-900">
+            <div className="mt-5 border-t border-white/10 pt-5">
+              <div className="flex items-center justify-between text-xl font-bold text-white">
                 <span>Total a pagar</span>
                 <span>{formatoCOP.format(resumen.subtotal)}</span>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => router.push("/productos")}
+              className="mt-6 w-full rounded-2xl bg-sky-500 py-3 text-lg font-semibold text-slate-950 transition hover:bg-sky-400"
+            >
+              Agregar mas productos
+            </button>
 
             <button
               type="button"
@@ -921,17 +842,9 @@ export default function Page() {
                 setModalPedidoAbierto(true);
               }}
               disabled={carrito.length === 0 || confirmandoPedido}
-              className="mt-6 w-full rounded-xl bg-blue-600 py-3 text-lg font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-3 w-full rounded-2xl border border-white/10 bg-white/15 py-3 text-lg font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {confirmandoPedido ? "Guardando..." : "Seguir comprando"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push("/productos")}
-              className="mt-3 w-full rounded-xl bg-blue-600 py-3 text-lg font-semibold text-white transition hover:bg-blue-500"
-            >
-              Agregar mas productos
+              {confirmandoPedido ? "Guardando..." : "Continuar comprando"}
             </button>
           </div>
         </aside>
@@ -939,20 +852,20 @@ export default function Page() {
 
       {modalPedidoAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 text-gray-800 shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-900">Detalles del envio</h2>
-            <p className="mt-1 text-sm text-gray-500">
+          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,0.45)]">
+            <h2 className="text-2xl font-bold text-white">Detalles del envio</h2>
+            <p className="mt-1 text-sm text-slate-400">
               Revisa tu informacion antes de finalizar.
             </p>
 
             {accionError && (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+              <div className="mt-4 rounded-2xl border border-amber-300/30 bg-amber-500/10 p-4 text-sm text-amber-100">
                 {accionError}
               </div>
             )}
 
-            <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
-              <p className="text-sm font-semibold text-gray-700">Tipo de entrega</p>
+            <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-sm font-semibold text-slate-200">Tipo de entrega</p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 {([
                   { value: "Domicilio", label: "Domicilio" },
@@ -961,7 +874,9 @@ export default function Page() {
                   <label
                     key={opcion.value}
                     className={`flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold ${
-                      tipoEntrega === opcion.value ? "border-sky-400 text-black" : "border-gray-200 text-gray-700"
+                      tipoEntrega === opcion.value
+                        ? "border-sky-400 bg-sky-400/10 text-white"
+                        : "border-white/10 text-slate-300"
                     }`}
                   >
                     <input
@@ -969,7 +884,12 @@ export default function Page() {
                       name="tipoEntrega"
                       value={opcion.value}
                       checked={tipoEntrega === opcion.value}
-                      onChange={() => setTipoEntrega(opcion.value)}
+                      onChange={() => {
+                        setTipoEntrega(opcion.value);
+                        setMetodoPagoSeleccionado(
+                          opcion.value === "Retiro_tienda" ? "Efectivo" : "Contraentrega"
+                        );
+                      }}
                       className="h-4 w-4"
                     />
                     {opcion.label}
@@ -979,25 +899,25 @@ export default function Page() {
             </div>
 
             {tipoEntrega === "Retiro_tienda" ? (
-              <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-700">Retiro en tienda</p>
-                <label className="block text-sm text-gray-600">
+              <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-semibold text-slate-200">Retiro en tienda</p>
+                <label className="block text-sm text-slate-300">
                   Hora al recoger
                   <input
                     type="datetime-local"
                     value={fechaHoraRetiro}
                     onChange={(e) => setFechaHoraRetiro(e.target.value)}
                     min={ahoraMinimaRetiro}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none focus:border-sky-400"
                   />
                 </label>
               </div>
             ) : (
-              <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
-                <p className="text-sm font-semibold text-gray-700">Datos de entrega</p>
+              <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-sm font-semibold text-slate-200">Datos de entrega</p>
                 {!entregarOtraDireccion ? (
                   <>
-                    <div className="space-y-2 text-sm text-gray-600">
+                    <div className="space-y-2 text-sm text-slate-300">
                       <p>Nombre de quien recibe: {`${detalleUsuario?.nombre ?? ""} ${detalleUsuario?.apellido ?? ""}`.trim() || "Sin nombre registrado"}</p>
                       <p>Telefono: {detalleUsuario?.telefono ?? "Sin telefono registrado"}</p>
                       <p>Direccion: {detalleUsuario?.direccion ?? "Sin direccion registrada"}</p>
@@ -1006,7 +926,7 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={() => setEntregarOtraDireccion(true)}
-                      className="inline-flex items-center gap-2 text-sm font-semibold text-sky-600 hover:text-sky-500"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-sky-300 hover:text-sky-200"
                     >
                       <FaPen />
                       Entregar a otra direccion
@@ -1014,40 +934,40 @@ export default function Page() {
                   </>
                 ) : (
                   <>
-                    <label className="block text-sm text-gray-600">
+                    <label className="block text-sm text-slate-300">
                       Nombre de quien recibe
                       <input
                         type="text"
                         value={nombreRecibe}
                         onChange={(e) => setNombreRecibe(e.target.value)}
-                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none focus:border-sky-400"
                       />
                     </label>
-                    <label className="block text-sm text-gray-600">
+                    <label className="block text-sm text-slate-300">
                       Telefono
                       <input
                         type="text"
                         value={telefonoContacto}
                         onChange={(e) => setTelefonoContacto(e.target.value)}
-                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none focus:border-sky-400"
                       />
                     </label>
-                    <label className="block text-sm text-gray-600">
+                    <label className="block text-sm text-slate-300">
                       Direccion
                       <input
                         type="text"
                         value={direccionEntrega}
                         onChange={(e) => setDireccionEntrega(e.target.value)}
-                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none focus:border-sky-400"
                       />
                     </label>
-                    <label className="block text-sm text-gray-600">
+                    <label className="block text-sm text-slate-300">
                       Ciudad
                       <input
                         type="text"
                         value={ciudadEntrega}
                         onChange={(e) => setCiudadEntrega(e.target.value)}
-                        className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-sky-400"
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none focus:border-sky-400"
                       />
                     </label>
                     <button
@@ -1061,7 +981,7 @@ export default function Page() {
                         setDireccionEntrega(detalleUsuario?.direccion ?? "");
                         setCiudadEntrega(detalleUsuario?.ciudad ?? "");
                       }}
-                      className="text-sm font-semibold text-gray-500 hover:text-gray-700"
+                      className="text-sm font-semibold text-slate-400 hover:text-white"
                     >
                       Usar direccion registrada
                     </button>
@@ -1077,14 +997,14 @@ export default function Page() {
                   setModalPedidoAbierto(false);
                   setAccionExito(null);
                 }}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={() => void guardarEntregaYContinuar()}
-                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-sky-400"
               >
                 {confirmandoPedido ? "Guardando..." : "Proceder al pago"}
               </button>
@@ -1094,176 +1014,182 @@ export default function Page() {
       )}
 
       {modalPagoAbierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 text-gray-800 shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-900">Pago del pedido</h2>
-            <p className="mt-1 text-sm text-gray-500">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 px-4 py-6">
+          <div
+            className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-950/95 p-6 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,0.45)] ${
+              metodoPagoSeleccionado === "Stripe" ? "max-w-5xl" : "max-w-lg"
+            }`}
+          >
+            <h2 className="text-2xl font-bold text-white">Pago del pedido</h2>
+            <p className="mt-1 text-sm text-slate-400">
               La entrega ya fue registrada. Ahora define como deseas pagar.
             </p>
 
             {accionError && (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+              <div className="mt-4 rounded-2xl border border-amber-300/30 bg-amber-500/10 p-4 text-sm text-amber-100">
                 {accionError}
               </div>
             )}
 
-            <div className="mt-5 rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
-              <p>Tipo de entrega: {tipoEntrega === "Domicilio" ? "Domicilio" : "Retiro en tienda"}</p>
-              {tipoEntrega === "Retiro_tienda" && fechaHoraRetiro && (
-                <p>Retiro programado: {new Date(fechaHoraRetiro).toLocaleString()}</p>
+            <div
+              className={`mt-5 min-h-0 flex-1 overflow-y-auto pr-1 grid gap-5 ${
+                metodoPagoSeleccionado === "Stripe" ? "lg:grid-cols-[360px_minmax(0,1fr)]" : ""
+              }`}
+            >
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                  <p>
+                    Tipo de entrega: {tipoEntrega === "Domicilio" ? "Domicilio" : "Retiro en tienda"}
+                  </p>
+                  {tipoEntrega === "Retiro_tienda" && fechaHoraRetiro && (
+                    <p>Retiro programado: {new Date(fechaHoraRetiro).toLocaleString()}</p>
+                  )}
+                </div>
+
+                <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-sm font-semibold text-slate-200">Metodo de pago</p>
+                  <div className="flex flex-col gap-2">
+                    {tipoEntrega === "Domicilio" ? (
+                      <>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Contraentrega"
+                              ? "border-sky-400 bg-sky-400/10"
+                              : "border-white/10 bg-white/5"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Contraentrega"}
+                            onChange={() => setMetodoPagoSeleccionado("Contraentrega")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-white">Contraentrega</span>
+                            <span className="block text-slate-400">
+                              Pagas al recibir el pedido en tu domicilio.
+                            </span>
+                          </span>
+                        </label>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Stripe"
+                              ? "border-sky-400 bg-sky-400/10"
+                              : "border-white/10 bg-white/5"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Stripe"}
+                            onChange={() => setMetodoPagoSeleccionado("Stripe")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-white">Stripe</span>
+                            <span className="block text-slate-400">
+                              Pago online con tarjeta usando Stripe.
+                            </span>
+                          </span>
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Efectivo"
+                              ? "border-sky-400 bg-sky-400/10"
+                              : "border-white/10 bg-white/5"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Efectivo"}
+                            onChange={() => setMetodoPagoSeleccionado("Efectivo")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-white">Efectivo en tienda</span>
+                            <span className="block text-slate-400">
+                              Pagas directamente en la tienda al momento de recoger.
+                            </span>
+                          </span>
+                        </label>
+                        <label
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
+                            metodoPagoSeleccionado === "Stripe"
+                              ? "border-sky-400 bg-sky-400/10"
+                              : "border-white/10 bg-white/5"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="metodoPago"
+                            checked={metodoPagoSeleccionado === "Stripe"}
+                            onChange={() => setMetodoPagoSeleccionado("Stripe")}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span>
+                            <span className="block font-semibold text-white">Stripe</span>
+                            <span className="block text-slate-400">
+                              Pago online con tarjeta usando Stripe.
+                            </span>
+                          </span>
+                        </label>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {metodoPagoSeleccionado === "Stripe" && (
+                <div className="min-h-0 rounded-3xl border border-sky-300/20 bg-sky-500/10 p-5">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-sky-200">Pago online con Stripe</p>
+                      <p className="mt-1 text-sm text-slate-300">
+                        El monto del pedido se envia a Stripe desde este checkout en pesos
+                        colombianos.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/20 px-4 py-3 text-right shadow-sm ring-1 ring-white/10">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-300">
+                        Total
+                      </p>
+                      <p className="text-lg font-bold text-white">
+                        {formatoCOP.format(resumen.subtotal)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="max-h-[65vh] overflow-y-auto pr-1">
+                    <StripeCheckoutContainer
+                      amount={resumen.subtotal}
+                      idCliente={usuarioActivo?.id ?? null}
+                      idPedidos={idsPedidosCarrito}
+                      tipoEntrega={tipoEntrega}
+                      fechaHoraRetiro={tipoEntrega === "Retiro_tienda" ? fechaHoraRetiro : null}
+                    />
+                  </div>
+                </div>
               )}
             </div>
 
-            <div className="mt-5 space-y-3 rounded-xl bg-gray-50 p-4">
-              <p className="text-sm font-semibold text-gray-700">Metodo de pago</p>
-              <div className="flex flex-col gap-2">
-                {tipoEntrega === "Domicilio" ? (
-                  <>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Pago_Online"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Pago_Online"}
-                        onChange={() => setMetodoPagoSeleccionado("Pago_Online")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Pago Online</span>
-                        <span className="block text-gray-500">
-                          El pago online sera manejado por Mercado Pago con un flujo seguro.
-                        </span>
-                      </span>
-                    </label>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Contraentrega"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Contraentrega"}
-                        onChange={() => setMetodoPagoSeleccionado("Contraentrega")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Contraentrega</span>
-                        <span className="block text-gray-500">
-                          Pagas al recibir el pedido en tu domicilio.
-                        </span>
-                      </span>
-                    </label>
-                  </>
-                ) : (
-                  <>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Efectivo"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Efectivo"}
-                        onChange={() => setMetodoPagoSeleccionado("Efectivo")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Efectivo en tienda</span>
-                        <span className="block text-gray-500">
-                          Pagas directamente en la tienda al momento de recoger.
-                        </span>
-                      </span>
-                    </label>
-                    <label
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm ${
-                        metodoPagoSeleccionado === "Pago_Online"
-                          ? "border-sky-400 bg-white"
-                          : "border-gray-200 bg-white/70"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="metodoPago"
-                        checked={metodoPagoSeleccionado === "Pago_Online"}
-                        onChange={() => setMetodoPagoSeleccionado("Pago_Online")}
-                        className="mt-1 h-4 w-4"
-                      />
-                      <span>
-                        <span className="block font-semibold text-gray-900">Pago Online</span>
-                        <span className="block text-gray-500">
-                          El pago online sera manejado por Mercado Pago con proteccion y seguridad.
-                        </span>
-                      </span>
-                    </label>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {metodoPagoSeleccionado === "Pago_Online" && (
-              <div className="mt-5 rounded-xl bg-sky-50 p-4">
-                <p className="text-sm font-semibold text-sky-900">
-                  Pago online con Mercado Pago
-                </p>
-                <p className="mt-1 text-sm text-sky-700">
-                  Se generara una preferencia con los pedidos actuales y su valor total. Al
-                  completar el pago, Mercado Pago te redirigira segun el estado de la transaccion.
-                </p>
-
-                {generandoPreferencia ? (
-                  <div className="mt-4 rounded-xl border border-sky-200 bg-white p-4 text-sm text-sky-700">
-                    Generando boton de pago...
-                  </div>
-                ) : preferenceId ? (
-                  <div className="mt-4 rounded-xl border border-sky-200 bg-white p-4">
-                    <MercadoPagoWalletButtonEnv
-                      preferenceId={preferenceId ?? ""}
-                      title="Boton de pago"
-                      description="Haz clic en el boton para continuar con Mercado Pago."
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-                    <p>Aun no se pudo generar la preferencia de pago.</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPreferenceIntentadaKey(null);
-                        void prepararPagoOnline();
-                      }}
-                      className="mt-3 rounded-lg border border-amber-300 px-3 py-2 font-semibold text-amber-700 hover:bg-amber-100"
-                    >
-                      Reintentar
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex shrink-0 justify-end gap-3 border-t border-white/10 pt-4">
               <button
                 type="button"
                 onClick={() => setModalPagoAbierto(false)}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5"
               >
                 Cerrar
               </button>
-              {metodoPagoSeleccionado !== "Pago_Online" && (
+              {metodoPagoSeleccionado !== "Stripe" && (
                 <button
                   type="button"
                   onClick={() => void confirmarPago()}
-                  className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-400"
+                  disabled={confirmandoPago}
+                  className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-sky-400"
                 >
                   {confirmandoPago ? "Confirmando..." : "Confirmar"}
                 </button>
