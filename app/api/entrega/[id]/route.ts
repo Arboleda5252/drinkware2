@@ -62,6 +62,22 @@ const toDto = (row: EntregaRow) => ({
   observacion: row.observacion,
 });
 
+const estadoEntregaOrder = [
+  "pendiente",
+  "asignado",
+  "en camino",
+  "entregado",
+  "no entregado",
+];
+
+const normalizeStatus = (value: string | null | undefined) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const getStatusIndex = (value: string | null | undefined) => {
+  const normalized = normalizeStatus(value);
+  return estadoEntregaOrder.findIndex((item) => item === normalized);
+};
+
 async function getTipoEntregaPedidoByEntregaId(idEntrega: number) {
   const { rows } = await sql<{ tipoEntrega: string | null }>(
     `
@@ -182,8 +198,60 @@ export async function PUT(req: NextRequest, { params }: Params) {
       addUpdate("costo_envio", costoEnvio);
     }
 
+    let forceFechaEntrega = false;
+
     if (body?.estadoEntrega !== undefined || body?.estado_entrega !== undefined) {
-      addUpdate("estado_entrega", textOrNull(body?.estadoEntrega ?? body?.estado_entrega));
+      const nuevoEstado = textOrNull(body?.estadoEntrega ?? body?.estado_entrega);
+      if (!nuevoEstado) {
+        addUpdate("estado_entrega", null);
+      } else {
+        const estadoIndex = getStatusIndex(nuevoEstado);
+        if (estadoIndex === -1) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                "Estado de entrega no válido. Use Pendiente, Asignado, En camino, Entregado o No entregado.",
+            },
+            { status: 400 }
+          );
+        }
+
+        const { rows: existingRows } = await sql<{ estadoEntrega: string | null }>(
+          `SELECT estado_entrega AS "estadoEntrega" FROM public.entrega WHERE id_entrega = $1 LIMIT 1;`,
+          [id]
+        );
+
+        if (!existingRows[0]) {
+          return NextResponse.json({ ok: false, error: "Entrega no encontrada" }, { status: 404 });
+        }
+
+        const currentIndex = getStatusIndex(existingRows[0].estadoEntrega);
+        if (currentIndex !== -1 && estadoIndex < currentIndex) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: "No se puede regresar a un estado anterior de entrega.",
+            },
+            { status: 400 }
+          );
+        }
+
+        if (nuevoEstado.toLowerCase() === "entregado") {
+          if (currentIndex !== getStatusIndex("en camino")) {
+            return NextResponse.json(
+              {
+                ok: false,
+                error: "El pedido debe estar en estado 'En camino' para confirmar la entrega.",
+              },
+              { status: 400 }
+            );
+          }
+          forceFechaEntrega = true;
+        }
+
+        addUpdate("estado_entrega", nuevoEstado);
+      }
     }
 
     const fechaProgramadaResult = parseDateOrNull(
@@ -208,7 +276,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (fechaSalidaResult.value !== undefined) addUpdate("fecha_salida", fechaSalidaResult.value);
 
     const fechaEntregaResult = parseDateOrNull(
-      body?.fechaEntrega ?? body?.fecha_entrega,
+      forceFechaEntrega ? new Date().toISOString() : body?.fechaEntrega ?? body?.fecha_entrega,
       "fecha_entrega"
     );
     if (!fechaEntregaResult.ok) return fechaEntregaResult.response;
@@ -268,6 +336,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     if (!rows[0]) {
       return NextResponse.json({ ok: false, error: "Entrega no encontrada" }, { status: 404 });
+    }
+
+    if (normalizeStatus(rows[0].estadoEntrega) === "entregado") {
+      await sql(
+        `UPDATE public.pedido SET estado_pedido = 'Finalizado' WHERE id_pedido = $1;`,
+        [rows[0].idPedido]
+      );
     }
 
     return NextResponse.json({ ok: true, data: toDto(rows[0]) });

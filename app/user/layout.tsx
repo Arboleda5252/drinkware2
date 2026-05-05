@@ -116,7 +116,7 @@ function Link_Roles(roleId: number | null | undefined): MenuLink[] {
       return [
       ...defaultLinks,
       { href: "/user/domiciliario", label: "Gestión de Entregas" },
-      { href: "/user/domiciliario/Turnos", label: "Mis entregas" },
+      { href: "/user/domiciliario/HistorialEntregas", label: "Mis entregas" },
     ];
     case 5:
       return [
