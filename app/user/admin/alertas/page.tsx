@@ -203,8 +203,21 @@ export default function AdminAlertasPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-4xl">
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
+        <header className="mb-6 rounded-3xl border border-gray-200 bg-white/90 px-5 py-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-indigo-500/10 text-indigo-500">
+                <MdOutlineMarkEmailUnread className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-sm uppercase tracking-[0.35em] text-indigo-500">Notificaciones</p>
+                <h1 className="text-3xl font-bold text-gray-900">Bandeja de alertas</h1>
+              </div>
+            </div>
+            <p className="max-w-xl text-sm leading-6 text-gray-600">
+              Controla alertas de inventario, pedidos del proveedor y nuevos productos sin perder el ritmo.
+            </p>
+          </div>
         </header>
 
         {!cargando && !error && (
@@ -224,7 +237,7 @@ export default function AdminAlertasPage() {
               <ul className="divide-y divide-gray-100">
                 {alertasStock.map((alerta, index) => (
                   <li key={alerta.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-1 items-start gap-3">
+                    <div className="flex flex-1 min-w-0 items-start gap-3">
                       <span
                         className={`mt-1 inline-flex h-10 w-10 items-center justify-center rounded-full ${
                           alerta.tipo === "agotado" ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"
@@ -232,10 +245,10 @@ export default function AdminAlertasPage() {
                       >
                         {alerta.tipo === "agotado" ? <BiAngry className="h-5 w-5" /> : <MdWarningAmber className="h-5 w-5" />}
                       </span>
-                      <div>
-                        <p className="font-semibold text-gray-900">{alerta.titulo}</p>
-                        <p className="text-sm text-gray-600">{alerta.mensaje}</p>
-                        <p className="mt-1 text-xs text-gray-400">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-gray-900">{alerta.titulo}</p>
+                        <p className="mt-1 text-sm text-gray-600">{alerta.mensaje}</p>
+                        <p className="mt-2 text-xs text-gray-400">
                           Stock actual: <strong>{alerta.producto.stock}</strong> &middot;{" "}
                           {alerta.producto.categoria ?? "Sin categoria"}
                         </p>

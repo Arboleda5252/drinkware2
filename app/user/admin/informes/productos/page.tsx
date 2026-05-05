@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { sql } from "@/app/Datalibs/database";
+import ProductReportShell, { ProductDetail } from "./product-report-shell";
 
 const stats = {
   totalProducts: 84,
@@ -7,11 +8,137 @@ const stats = {
   averageTicket: 125,
 };
 
-const products = [
-  { name: "Marina Rodríguez", sold: 1320, revenue: 6760, share: 18 },
-  { name: "Sirope de Anís", sold: 940, revenue: 4820, share: 13 },
-  { name: "Fernet Premium", sold: 760, revenue: 3940, share: 10 },
-  { name: "Cerveza Artesanal", sold: 1120, revenue: 7110, share: 19 },
+const productDetails: ProductDetail[] = [
+  {
+    id: 1,
+    name: "Fernet Premium",
+    category: "Licores",
+    price: 52000,
+    cost: 31000,
+    margin: 40,
+    sold: 760,
+    revenue: 3940000,
+    share: 10,
+    avgTicket: 39000,
+    inventoryDays: 28,
+    stock: 18,
+    velocity: "Media",
+    rotation: "Media rotación",
+    trend: "Estable",
+    trendText: "Buen desempeño, pero puede crecer con mejor impulso comercial.",
+    marginPerUnit: 21000,
+    profit: 15960000,
+    related: ["Whisky Reserva + Soda", "Cerveza Artesanal + Snacks"],
+    buyerProfiles: ["VIP", "Frecuentes"],
+    recommendation: "Aumenta promoción en semana para mejorar ticket promedio sin sacrificar margen.",
+    strategic: "Amarillo",
+    classification: "Vende bien, pero aún puede mejorar su rotación y margen.",
+    image: "copa.png",
+  },
+  {
+    id: 2,
+    name: "Cerveza Artesanal",
+    category: "Cervezas",
+    price: 12000,
+    cost: 6200,
+    margin: 48,
+    sold: 1120,
+    revenue: 1344000,
+    share: 19,
+    avgTicket: 12000,
+    inventoryDays: 12,
+    stock: 42,
+    velocity: "Alta",
+    rotation: "Alta rotación",
+    trend: "Creciente",
+    trendText: "Alto volumen con buena continuidad. Ideal para combos de impulso.",
+    marginPerUnit: 5800,
+    profit: 6496000,
+    related: ["Snacks salados", "Soda Lime"],
+    buyerProfiles: ["Frecuentes", "Nuevos clientes"],
+    recommendation: "Impulsa combos de cervezas con snacks para captar clientes de alto volumen.",
+    strategic: "Verde",
+    classification: "Producto estrella: vende mucho y deja margen saludable.",
+    image: "cervezas.png",
+  },
+  {
+    id: 3,
+    name: "Sirope de Anís",
+    category: "Mixers",
+    price: 8500,
+    cost: 3200,
+    margin: 62,
+    sold: 940,
+    revenue: 799000,
+    share: 13,
+    avgTicket: 8500,
+    inventoryDays: 45,
+    stock: 75,
+    velocity: "Baja",
+    rotation: "Baja rotación",
+    trend: "En caída",
+    trendText: "Tiene buen margen, pero necesita mayor rotación y promoción cruzada.",
+    marginPerUnit: 5300,
+    profit: 4982000,
+    related: ["Whisky Reserva + Sirope", "Vodka Premium + Mixer"],
+    buyerProfiles: ["VIP", "Frecuentes"],
+    recommendation: "Crea una promoción cruzada con licores para mover stock lento.",
+    strategic: "Rojo",
+    classification: "Producto con buen margen, pero rotación baja. Precisa estrategia de impulso.",
+    image: "descorchar.jpg",
+  },
+  {
+    id: 4,
+    name: "Whisky Reserva",
+    category: "Licores",
+    price: 85000,
+    cost: 52000,
+    margin: 39,
+    sold: 420,
+    revenue: 3570000,
+    share: 16,
+    avgTicket: 85000,
+    inventoryDays: 35,
+    stock: 12,
+    velocity: "Media",
+    rotation: "Media rotación",
+    trend: "Creciente",
+    trendText: "Alta demanda premium, pero el stock requiere monitoreo.",
+    marginPerUnit: 33000,
+    profit: 13860000,
+    related: ["Sirope de Anís", "Hielo Premium"],
+    buyerProfiles: ["VIP", "Nuevos clientes"],
+    recommendation: "Mantén disponibilidad y evalúa aumentar precio moderado según demanda.",
+    strategic: "Amarillo",
+    classification: "Producto con buena rentabilidad, ideal para promociones premium.",
+    image: "rones.png",
+  },
+  {
+    id: 5,
+    name: "Vodka Premium",
+    category: "Licores",
+    price: 48000,
+    cost: 25000,
+    margin: 48,
+    sold: 620,
+    revenue: 2976000,
+    share: 14,
+    avgTicket: 48000,
+    inventoryDays: 20,
+    stock: 28,
+    velocity: "Alta",
+    rotation: "Alta rotación",
+    trend: "Creciente",
+    trendText: "Buen desempeño con margen sólido, apto para ventas frecuentes.",
+    marginPerUnit: 23000,
+    profit: 14260000,
+    related: ["Mixer Citrus", "Hielo"],
+    buyerProfiles: ["Frecuentes", "VIP"],
+    recommendation: "Impulsa combos de vodka con mixers y hielo para aumentar ticket medio.",
+    strategic: "Verde",
+    classification: "Producto con alto rendimiento y buen retorno por unidad.",
+    image: "club.jpg",
+  },
 ];
 
 async function getProductStats() {
@@ -26,7 +153,7 @@ async function getProductStats() {
       SELECT
         COALESCE(SUM(dp.cantidad), 0) as total_sales,
         COALESCE(SUM(dp.subtotal), 0) as total_revenue
-      FROM public.detallepedido dp
+      FROM public.detalle_pedido dp
     `);
 
     const totalProducts = productCount[0]?.count || 0;
@@ -57,7 +184,7 @@ async function getTopProducts() {
         COALESCE(SUM(dp.cantidad), 0) as total_sold,
         COALESCE(SUM(dp.subtotal), 0) as total_revenue
       FROM public.producto p
-      LEFT JOIN public.detallepedido dp ON p.idproducto = dp.id_producto
+      LEFT JOIN public.detalle_pedido dp ON p.idproducto = dp.id_producto
       WHERE p.estados = 'Disponible'
       GROUP BY p.idproducto, p.nombre
       HAVING COALESCE(SUM(dp.cantidad), 0) > 0
@@ -76,7 +203,12 @@ async function getTopProducts() {
     }));
   } catch (error) {
     console.error("Error obteniendo productos top:", error);
-    return products;
+    return productDetails.map((product) => ({
+      name: product.name,
+      sold: product.sold,
+      revenue: product.revenue,
+      share: product.share,
+    }));
   }
 }
 
@@ -89,7 +221,7 @@ export default async function InformeProductoPage() {
   return (
     <main className="min-h-screen bg-slate-950/20 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-8">
-        <section className="rounded-[2rem] border border-sky-400/20 bg-slate-900/95 p-8 shadow-[0_30px_80px_rgba(15,23,42,0.35)]">
+        <section className="rounded-4xl border border-sky-400/20 bg-slate-900/95 p-8 shadow-[0_30px_80px_rgba(15,23,42,0.35)]">
           <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-3">
               <p className="text-sm font-semibold uppercase tracking-[0.35em] text-sky-300/80">
@@ -127,89 +259,7 @@ export default async function InformeProductoPage() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
-          <div className="rounded-[2rem] border border-white/10 bg-slate-900/95 p-6 shadow-sm">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-white">Productos más vendidos</h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Ordena y compara resultados por volumen, ingresos y participación de mercado.
-                </p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-700/40 bg-slate-950/80 px-4 py-3 text-sm text-slate-300">
-                  <p className="font-semibold text-slate-100">Filtrar por</p>
-                  <p className="mt-1 text-slate-400">Últimos 30 días</p>
-                </div>
-                <div className="rounded-2xl border border-slate-700/40 bg-slate-950/80 px-4 py-3 text-sm text-slate-300">
-                  <p className="font-semibold text-slate-100">Categoría</p>
-                  <p className="mt-1 text-slate-400">Todas</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 overflow-hidden rounded-3xl border border-slate-700/50 bg-slate-950/80">
-              <div className="grid grid-cols-4 gap-4 border-b border-slate-700/50 bg-slate-950/90 px-5 py-4 text-sm uppercase tracking-[0.18em] text-slate-400">
-                <span>Producto</span>
-                <span className="text-right">Unidades</span>
-                <span className="text-right">Ingresos</span>
-                <span className="text-right">Participación</span>
-              </div>
-
-              <div className="divide-y divide-slate-800">
-                {productsData.length > 0 ? (
-                  productsData.map((product, index) => (
-                    <div key={index} className="grid grid-cols-4 gap-4 px-5 py-4 text-sm text-slate-200">
-                      <span className="truncate">{product.name}</span>
-                      <span className="text-right text-slate-300">{product.sold.toLocaleString()}</span>
-                      <span className="text-right text-slate-300">${product.revenue.toLocaleString()}</span>
-                      <span className="text-right text-sky-300">{product.share}%</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-5 py-8 text-center text-slate-400">
-                    No hay datos de ventas disponibles
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <aside className="rounded-[2rem] border border-sky-400/10 bg-slate-950/95 p-6 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.35em] text-sky-300/80">
-              Insights del informe
-            </p>
-            <div className="mt-5 space-y-4 text-sm text-slate-300">
-              {productsData.length > 0 ? (
-                <>
-                  <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-                    <p className="font-semibold text-white">Producto estrella</p>
-                    <p className="mt-2 text-slate-400">
-                      "{productsData[0]?.name}" lidera con {productsData[0]?.share}% de participación en ventas.
-                    </p>
-                  </div>
-                  <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-                    <p className="font-semibold text-white">Oportunidad clave</p>
-                    <p className="mt-2 text-slate-400">
-                      {productsData.length > 1 ? `Aumentar stock de "${productsData[1]?.name}" podría elevar ingresos.` : 'Analiza más productos para identificar oportunidades.'}
-                    </p>
-                  </div>
-                  <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-                    <p className="font-semibold text-white">Tendencia</p>
-                    <p className="mt-2 text-slate-400">
-                      Los productos con mayor participación concentran {productsData.slice(0, 3).reduce((sum, p) => sum + p.share, 0)}% de las ventas.
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-                  <p className="font-semibold text-white">Sin datos</p>
-                  <p className="mt-2 text-slate-400">No hay suficientes datos de ventas para generar insights.</p>
-                </div>
-              )}
-            </div>
-          </aside>
-        </section>
+        <ProductReportShell summary={statsData} topProducts={productsData} initialProducts={productDetails} />
       </div>
     </main>
   );

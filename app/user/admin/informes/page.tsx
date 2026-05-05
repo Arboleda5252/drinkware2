@@ -2,6 +2,12 @@ import Link from "next/link";
 
 const reports = [
   {
+    title: "Informe Trimestral",
+    description: "Análisis completo: ventas, categorías, horarios pico y rentabilidad por trimestre.",
+    href: "/user/admin/informes/trimestral",
+    badge: "Trimestre",
+  },
+  {
     title: "Informe por producto",
     description: "Visualiza el rendimiento de cada línea de licores.",
     href: "/user/admin/informes/productos",
@@ -10,16 +16,19 @@ const reports = [
   {
     title: "Informe por cliente",
     description: "Identifica a tus consumidores frecuentes y sus preferencias.",
+    href: "/user/admin/informes/cliente",
     badge: "Cliente",
   },
   {
     title: "Top 10 licores",
     description: "Descubre los 10 productos que más rotan en la tienda.",
+    href: "/user/admin/informes/top-10-licores",
     badge: "Top 10",
   },
   {
     title: "Top 10 compradores",
     description: "Los clientes con mayor ticket promedio y recurrencia.",
+    href: "/user/admin/informes/top-10-compradores",
     badge: "Top 10",
   },
 ];
@@ -28,7 +37,7 @@ export default function InformesPage() {
   return (
     <main className="min-h-screen bg-slate-950/40 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-8">
-        <section className="overflow-hidden rounded-[2rem] border border-sky-400/20 bg-slate-900/90 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-10">
+        <section className="overflow-hidden rounded-4xl border border-sky-400/20 bg-slate-900/90 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-10">
           <div className="space-y-6 px-6 py-8 sm:px-10 sm:py-12">
             <div className="max-w-3xl space-y-3">
               <p className="text-sm font-semibold uppercase tracking-[0.35em] text-sky-300/80">
@@ -66,7 +75,7 @@ export default function InformesPage() {
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <article className="rounded-[2rem] border border-white/10 bg-slate-900/90 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.24)]">
+          <article className="rounded-4xl border border-white/10 bg-slate-900/90 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.24)]">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-300/80">
               Vista rápida
             </p>
@@ -98,8 +107,8 @@ export default function InformesPage() {
             </div>
           </article>
 
-          <aside className="rounded-[2rem] border border-sky-400/10 bg-slate-950/80 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.2)]">
-            <div className="rounded-[1.75rem] border border-slate-800/90 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900/80 p-6">
+          <aside className="rounded-4xl border border-sky-400/10 bg-slate-950/80 p-8 shadow-[0_20px_60px_rgba(15,23,42,0.2)]">
+            <div className="rounded-[1.75rem] border border-slate-800/90 bg-linear-to-br from-slate-900 via-slate-950 to-slate-900/80 p-6">
               <p className="text-sm font-semibold uppercase tracking-[0.3em] text-sky-300/80">
                 Indicadores licoreros
               </p>
