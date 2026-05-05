@@ -200,7 +200,7 @@ export default function GestionDomiciliarioPage() {
             vendedorNombre:
               vendedor
                 ? [vendedor.nombre, vendedor.apellido].filter(Boolean).join(" ")
-                : "Sin vendedor",
+                : "Compra directa del usuario",
           };
         }),
     [pedidos, vendedoresMap]
@@ -350,15 +350,16 @@ export default function GestionDomiciliarioPage() {
 
       {activeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-6xl rounded-[2rem] border border-white/10 bg-slate-950/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+          <div className="relative w-full max-w-3xl rounded-[2rem] border border-white/10 bg-slate-950/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
             <button
+              type="button"
               onClick={closeModal}
               className="absolute right-5 top-5 text-white/45 transition hover:text-white"
             >
               X
             </button>
 
-            <div className="border-b border-white/10 px-6 py-6 text-center sm:px-8">
+            <div className="border-b border-white/10 px-6 py-6 sm:px-8">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-200">
                 {activeModal === "domiciliarios"
                   ? "Listado"
@@ -366,7 +367,7 @@ export default function GestionDomiciliarioPage() {
                     ? "Retiro en tienda"
                     : "Asignacion"}
               </p>
-              <h2 className="mt-3 text-2xl font-bold tracking-tight">
+              <h2 className="mt-3 text-center text-2xl font-bold tracking-tight">
                 {activeModal === "domiciliarios"
                   ? "Domiciliarios"
                   : activeModal === "retiros"
@@ -375,80 +376,82 @@ export default function GestionDomiciliarioPage() {
               </h2>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto px-6 py-6 sm:px-8">
+            <div className="max-h-[65vh] overflow-y-auto px-6 py-6 sm:px-8">
               {activeModal === "domiciliarios" && (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-black/20 text-left text-white/65">
-                      <tr>
-                        <th className="px-6 py-3 font-semibold">Nombre</th>
-                        <th className="px-6 py-3 font-semibold">Correo</th>
-                        <th className="px-6 py-3 font-semibold">Documento</th>
-                        <th className="px-6 py-3 font-semibold">Estado laboral</th>
-                        <th className="px-6 py-3 font-semibold">Disponibilidad</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10 text-white/85">
-                      {domiciliariosView.map((domiciliario) => (
-                        <tr key={domiciliario.idDomiciliario} className="transition hover:bg-white/6">
-                          <td className="px-6 py-4">{domiciliario.nombreCompleto}</td>
-                          <td className="px-6 py-4 text-white/70">{domiciliario.correo ?? "-"}</td>
-                          <td className="px-6 py-4 text-white/70">{domiciliario.documento ?? "-"}</td>
-                          <td className="px-6 py-4">
-                            <select
-                              value={domiciliario.estadoLaboral}
-                              onChange={(event) => updateEstadoLaboral(domiciliario, event.target.value)}
-                              disabled={savingDomiciliarioId === domiciliario.idDomiciliario}
-                              className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
-                            >
-                              {ESTADOS_LABORALES.map((estado) => (
-                                <option key={estado} value={estado}>
-                                  {estado}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-6 py-4 text-white/70">{domiciliario.disponibilidadManual}</td>
+                <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5">
+                  <div className="overflow-y-auto pr-2">
+                    <table className="w-full table-fixed text-sm">
+                      <thead className="sticky top-0 bg-slate-950 text-left text-white/65">
+                        <tr>
+                          <th className="px-6 py-3 font-semibold">Nombre</th>
+                          <th className="px-6 py-3 font-semibold">Correo</th>
+                          <th className="px-6 py-3 font-semibold">Documento</th>
+                          <th className="px-6 py-3 font-semibold">Estado laboral</th>
+                          <th className="px-6 py-3 font-semibold">Disponibilidad</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-white/10 text-white/85">
+                        {domiciliariosView.map((domiciliario) => (
+                          <tr key={domiciliario.idDomiciliario} className="transition hover:bg-white/6">
+                            <td className="px-6 py-4">{domiciliario.nombreCompleto}</td>
+                            <td className="px-6 py-4 text-white/70">{domiciliario.correo ?? "-"}</td>
+                            <td className="px-6 py-4 text-white/70">{domiciliario.documento ?? "-"}</td>
+                            <td className="px-6 py-4">
+                              <select
+                                value={domiciliario.estadoLaboral}
+                                onChange={(event) => updateEstadoLaboral(domiciliario, event.target.value)}
+                                disabled={savingDomiciliarioId === domiciliario.idDomiciliario}
+                                className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
+                              >
+                                {ESTADOS_LABORALES.map((estado) => (
+                                  <option key={estado} value={estado}>
+                                    {estado}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-6 py-4 text-white/70">{domiciliario.disponibilidadManual}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
               {activeModal === "retiros" && (
                 <div className="space-y-3">
-                  {retiros.map((pedido) => (
-                    <div
-                      key={pedido.idPedido}
-                      className="rounded-[1.5rem] border border-white/10 bg-white/5 px-5 py-4 text-center"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="sm:text-left">
-                          <p className="text-sm font-semibold text-white">Pedido #{pedido.idPedido}</p>
-                          <p className="mt-1 text-sm text-white/60">Vendedor: {pedido.vendedorNombre}</p>
+                    {retiros.map((pedido) => (
+                      <div
+                        key={pedido.idPedido}
+                        className="rounded-[1.5rem] border border-white/10 bg-black/15 px-5 py-4 text-center"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="sm:text-left">
+                            <p className="text-sm font-semibold text-white">Pedido #{pedido.idPedido}</p>
+                            <p className="mt-1 text-sm text-white/60">Vendedor: {pedido.vendedorNombre}</p>
+                          </div>
+                          <div className="sm:text-right">
+                            <p className="text-sm text-white/60">Fecha</p>
+                            <p className="text-sm text-white">{formatDate(pedido.fechaCreacion)}</p>
+                          </div>
                         </div>
-                        <div className="sm:text-right">
-                          <p className="text-sm text-white/60">Fecha</p>
-                          <p className="text-sm text-white">{formatDate(pedido.fechaCreacion)}</p>
-                        </div>
-                      </div>
 
-                      <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
-                        <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/80">
-                          {pedido.estadoPedido ?? "Sin estado"}
-                        </span>
-                        <span className="inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-100">
-                          Retiro en tienda
-                        </span>
+                        <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
+                          <span className="inline-flex rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/80">
+                            {pedido.estadoPedido ?? "Sin estado"}
+                          </span>
+                          <span className="inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-100">
+                            Retiro en tienda
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
 
               {activeModal === "domicilios" && (
-                <div className="space-y-4">
+                <div className="space-y-4 pr-2">
                   {domicilios.map((pedido) => {
                     const entrega = pedido.entrega;
 
@@ -552,6 +555,7 @@ export default function GestionDomiciliarioPage() {
           <p className="text-xs uppercase tracking-[0.24em] text-sky-200/90">Domiciliarios</p>
           <p className="mx-auto mt-4 max-w-sm flex-1 text-sm leading-6 text-white/65">Consulta el listado de domiciliarios disponibles y revisa cuáles se encuentran activos actualmente.</p>
           <button
+            type="button"
             onClick={() => setActiveModal("domiciliarios")}
             className="mt-6 inline-flex min-h-[44px] items-center justify-center self-center rounded-2xl border border-sky-300/20 bg-sky-400/10 px-4 py-2 font-semibold text-sky-100 transition hover:bg-sky-400/20"
           >
@@ -563,6 +567,7 @@ export default function GestionDomiciliarioPage() {
           <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/90">Retiros en tienda</p>
           <p className="mx-auto mt-4 max-w-sm flex-1 text-sm leading-6 text-white/65">Listado de pedidos retirados o pendientes</p>
           <button
+            type="button"
             onClick={() => setActiveModal("retiros")}
             className="mt-6 inline-flex min-h-[44px] items-center justify-center self-center rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
           >
@@ -575,6 +580,7 @@ export default function GestionDomiciliarioPage() {
           <p className="mx-auto mt-4 max-w-sm flex-1 text-sm leading-6 text-white/65">Consulta las entregas a domicilio pendientes de asignación y haz seguimiento.
           </p>
           <button
+            type="button"
             onClick={() => setActiveModal("domicilios")}
             className="mt-6 inline-flex min-h-[44px] items-center justify-center self-center rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-2 font-semibold text-amber-100 transition hover:bg-amber-400/20"
           >
