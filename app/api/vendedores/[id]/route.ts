@@ -7,31 +7,43 @@ type Params = { params: Promise<{ id: string }> };
 
 type VendedorRow = {
   id: number;
-  estado: string | null;
+  nombre: string | null;
+  apellido: string | null;
+  correo: string | null;
+  documento: string | null;
+  estado: boolean | null;
   fechaIngreso: Date | null;
 };
 
 const toVendedorDto = (row: VendedorRow) => ({
   id: row.id,
-  estado: row.estado,
+  nombre: row.nombre,
+  apellido: row.apellido,
+  correo: row.correo,
+  documento: row.documento,
+  estado: Boolean(row.estado),
   fechaIngreso: row.fechaIngreso?.toISOString() ?? null,
 });
 
 const selectById = `
   SELECT
-    idvendedor AS id,
-    estado,
-    fechaingreso AS "fechaIngreso"
-  FROM public.vendedor
-  WHERE idvendedor = $1;
+    v.idvendedor AS id,
+    u.nombre,
+    u.apellido,
+    u.email AS correo,
+    u.documento,
+    v.estado,
+    v.fechaingreso AS "fechaIngreso"
+  FROM public.vendedor AS v
+  LEFT JOIN public.usuario AS u ON u.idusuario = v.idvendedor
+  WHERE v.idvendedor = $1;
 `;
 
-// GET
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id: routeId } = await params;
   const id = Number(routeId);
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "ID invalido" }, { status: 400 });
   }
 
   try {
@@ -49,41 +61,45 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-// PUT
 export async function PUT(req: NextRequest, { params }: Params) {
   const { id: routeId } = await params;
   const id = Number(routeId);
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "ID invalido" }, { status: 400 });
   }
 
-  let body: any;
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
     body = {};
   }
 
+  const payload = (typeof body === "object" && body ? body : {}) as {
+    estado?: boolean;
+    fechaIngreso?: string;
+  };
+
   const updates: string[] = [];
-  const values: any[] = [];
+  const values: Array<boolean | Date | number> = [];
   let index = 1;
 
-  if (body?.estado !== undefined) {
-    if (typeof body.estado !== "string" || !body.estado.trim()) {
+  if (payload.estado !== undefined) {
+    if (typeof payload.estado !== "boolean") {
       return NextResponse.json(
-        { ok: false, error: "estado debe ser un texto no vacío" },
+        { ok: false, error: "estado debe ser booleano" },
         { status: 400 }
       );
     }
     updates.push(`estado = $${index++}`);
-    values.push(body.estado.trim());
+    values.push(payload.estado);
   }
 
-  if (body?.fechaIngreso !== undefined) {
-    const fecha = new Date(body.fechaIngreso);
+  if (payload.fechaIngreso !== undefined) {
+    const fecha = new Date(payload.fechaIngreso);
     if (Number.isNaN(fecha.getTime())) {
       return NextResponse.json(
-        { ok: false, error: "fechaIngreso no es una fecha válida" },
+        { ok: false, error: "fechaIngreso no es una fecha valida" },
         { status: 400 }
       );
     }
@@ -93,7 +109,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   if (updates.length === 0) {
     return NextResponse.json(
-      { ok: false, error: "No hay campos válidos para actualizar" },
+      { ok: false, error: "No hay campos validos para actualizar" },
       { status: 400 }
     );
   }
@@ -101,19 +117,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
   values.push(id);
 
   try {
-    const { rows } = await sql<VendedorRow>(
+    await sql(
       `
         UPDATE public.vendedor
         SET ${updates.join(", ")}
-        WHERE idvendedor = $${index}
-        RETURNING
-          idvendedor AS id,
-          estado,
-          fechaingreso AS "fechaIngreso";
+        WHERE idvendedor = $${index};
       `,
       values
     );
 
+    const { rows } = await sql<VendedorRow>(selectById, [id]);
     if (!rows[0]) {
       return NextResponse.json({ ok: false, error: "Vendedor no encontrado" }, { status: 404 });
     }
@@ -128,12 +141,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-// DELETE
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const { id: routeId } = await params;
   const id = Number(routeId);
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "ID invalido" }, { status: 400 });
   }
 
   try {

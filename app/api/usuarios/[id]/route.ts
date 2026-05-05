@@ -31,6 +31,10 @@ type DomiciliarioExistente = {
   idDomiciliario: number;
 };
 
+type VendedorExistente = {
+  idVendedor: number;
+};
+
 function parseId(idStr: string): number | null {
   const n = Number(idStr);
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -80,6 +84,48 @@ async function syncDomiciliarioByRole(userId: number, roleId: number) {
       VALUES ($1);
     `,
     [userId]
+  );
+
+  return { synced: true, created: true };
+}
+
+async function syncVendedorByRole(userId: number, roleId: number) {
+  const { rows: roleRows } = await sql<RolDetalle>(
+    `
+      SELECT rol
+      FROM user_rol
+      WHERE id_rol = $1
+      LIMIT 1;
+    `,
+    [roleId]
+  );
+
+  const roleName = roleRows[0]?.rol?.trim().toLowerCase() ?? null;
+  if (roleName !== 'vendedor') {
+    return { synced: false, created: false };
+  }
+
+  const { rows: vendedorRows } = await sql<VendedorExistente>(
+    `
+      SELECT idvendedor AS "idVendedor"
+      FROM public.vendedor
+      WHERE idvendedor = $1
+      LIMIT 1;
+    `,
+    [userId]
+  );
+
+  if (vendedorRows.length > 0) {
+    return { synced: true, created: false };
+  }
+
+  await sql(
+    `
+      INSERT INTO public.vendedor (idvendedor, estado, fechaingreso)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (idvendedor) DO NOTHING;
+    `,
+    [userId, true]
   );
 
   return { synced: true, created: true };
@@ -180,14 +226,17 @@ export async function PUT(req: NextRequest, { params }: { params: UsuarioRoutePa
     await sql(query, valoresActualizar);
 
     let domiciliario = { synced: false, created: false };
+    let vendedor = { synced: false, created: false };
     if (body.id_rol !== undefined) {
       domiciliario = await syncDomiciliarioByRole(id, Number(body.id_rol));
+      vendedor = await syncVendedorByRole(id, Number(body.id_rol));
     }
 
     return NextResponse.json({
       ok: true,
       message: 'Usuario actualizado',
       domiciliario,
+      vendedor,
     });
   } catch (err) {
     console.error(err);

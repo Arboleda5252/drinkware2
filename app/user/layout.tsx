@@ -3,6 +3,7 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getUserFromSession } from "@/app/Datalibs/auth";
+import { sql } from "@/app/Datalibs/database";
 
 type UserLayoutProps = {
   children: ReactNode;
@@ -19,9 +20,10 @@ export default async function UserLayout({ children }: UserLayoutProps) {
     redirect("/account/login");
   }
 
+  const vendedorActivo = user.id_rol === 3 ? await getVendedorActivo(user.idusuario) : undefined;
   const displayName = user.nombre || user.nombreusuario;
   const displayRole = user.rol ?? "Usuario";
-  const menuLinks = Link_Roles(user.id_rol);
+  const menuLinks = Link_Roles(user.id_rol, vendedorActivo);
   const roleLogo = getRoleLogo(user.id_rol);
 
   return (
@@ -30,48 +32,66 @@ export default async function UserLayout({ children }: UserLayoutProps) {
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95" />
 
       <div className="relative z-10 flex min-h-screen flex-col md:flex-row">
-      <aside className="w-full border-b border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md md:w-72 md:border-b-0 md:border-r">
-        <div className="flex h-full flex-col px-3 py-4 md:px-4">
-          <Link
-            className="mb-4 flex h-20 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 md:h-44"
-            href="/user"
-          >
-            <div className="flex w-full flex-col items-center justify-center text-white">
-              <Image
-                src={roleLogo}
-                alt="Logo usuario"
-                width={60}
-                height={60}
-                className="w-full max-w-[60px] brightness-0 invert"
-              />
-              <p className="mt-3 text-lg font-semibold md:text-2xl">{displayName}</p>
+        <aside className="w-full border-b border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md md:w-72 md:border-b-0 md:border-r">
+          <div className="flex h-full flex-col px-3 py-4 md:px-4">
+            <Link
+              className="mb-4 flex h-20 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 md:h-44"
+              href="/user"
+            >
+              <div className="flex w-full flex-col items-center justify-center text-white">
+                <Image
+                  src={roleLogo}
+                  alt="Logo usuario"
+                  width={60}
+                  height={60}
+                  className="w-full max-w-[60px] brightness-0 invert"
+                />
+                <p className="mt-3 text-lg font-semibold md:text-2xl">{displayName}</p>
+              </div>
+            </Link>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+              <p className="text-xs uppercase tracking-[0.2em] text-sky-200">{displayRole}</p>
             </div>
-          </Link>
 
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
-            <p className="text-xs uppercase tracking-[0.2em] text-sky-200">{displayRole}</p>
+            <div className="mt-4 flex grow flex-row justify-between space-x-2 md:flex-col md:space-x-0 md:space-y-2">
+              <nav className="flex w-full flex-col space-y-2">
+                {menuLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex items-center rounded-xl border border-white/10 bg-gray-200/12 px-4 py-3 text-sm font-semibold text-white/85 transition hover:border-sky-300/30 hover:bg-gray-300/18 hover:text-white"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
+        </aside>
 
-          <div className="mt-4 flex grow flex-row justify-between space-x-2 md:flex-col md:space-x-0 md:space-y-2">
-            <nav className="flex w-full flex-col space-y-2">
-              {menuLinks.map(link => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="flex items-center rounded-xl border border-white/10 bg-gray-200/12 px-4 py-3 text-sm font-semibold text-white/85 transition hover:border-sky-300/30 hover:bg-gray-300/18 hover:text-white"
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-        </div>
-      </aside>
-
-      <main className="flex-1 p-6 md:p-8">{children}</main>
+        <main className="flex-1 p-6 md:p-8">{children}</main>
       </div>
     </div>
   );
+}
+
+async function getVendedorActivo(userId: number) {
+  const { rows } = await sql<{ estado: boolean | null }>(
+    `
+      SELECT estado
+      FROM public.vendedor
+      WHERE idvendedor = $1
+      LIMIT 1;
+    `,
+    [userId]
+  );
+
+  if (!rows[0]) {
+    return false;
+  }
+
+  return Boolean(rows[0].estado);
 }
 
 function getRoleLogo(roleId: number | null | undefined) {
@@ -89,8 +109,7 @@ function getRoleLogo(roleId: number | null | undefined) {
   }
 }
 
-// Link por rol de usuario
-function Link_Roles(roleId: number | null | undefined): MenuLink[] {
+function Link_Roles(roleId: number | null | undefined, vendedorActivo?: boolean): MenuLink[] {
   const defaultLinks: MenuLink[] = [
     { href: "/user/usuario", label: "Mi cuenta" },
     { href: "/user/usuario/compras", label: "Mis compras" },
@@ -102,14 +121,17 @@ function Link_Roles(roleId: number | null | undefined): MenuLink[] {
       return [
         ...defaultLinks,
         { href: "/user/admin/alertas", label: "Notificaciones" },
-        { href: "/user/admin", label: "Gestión de usuarios" },
-        { href: "/user/admin/products", label: "Gestión de productos" },
-        { href: "/user/vendedor", label: "Gestión de Ventas" },
+        { href: "/user/admin", label: "Gestion de usuarios" },
+        { href: "/user/admin/products", label: "Gestion de productos" },
+        { href: "/user/vendedor", label: "Gestion de Ventas" },
       ];
     case 3:
+      if (vendedorActivo === false) {
+        return defaultLinks;
+      }
       return [
         ...defaultLinks,
-        { href: "/user/vendedor", label: "Gestión de Ventas" },
+        { href: "/user/vendedor", label: "Gestion de Ventas" },
         { href: "/user/vendedor/pedidos", label: "Pedidos de Clientes" },
       ];
     case 5:

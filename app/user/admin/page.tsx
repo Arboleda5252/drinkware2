@@ -2,18 +2,18 @@ import Link from "next/link";
 
 const adminOptions = [
   {
-    href: "/user/vendedor/pedidos",
+    href: "/user/admin/gestionDomiciliario",
     eyebrow: "Operaciones",
     title: "Gestión de entregas",
     description:
       "Consulta pedidos, asigna domiciliarios y supervisa el estado de cada despacho en tiempo real.",
   },
   {
-    href: "/user/vendedor",
+    href: "/user/admin/gestionVendedor",
     eyebrow: "Comercial",
-    title: "Gestión comercial",
+    title: "Gestión de Vendedores",
     description:
-      "Administra vendedores, clientes, ventas y el seguimiento de cada oportunidad comercial.",
+      "Administra vendedores, permisos de acceso y supervisa su desempeño en la plataforma.",
   },
   {
     href: "/user/admin/gestionUsers",
