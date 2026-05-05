@@ -23,6 +23,14 @@ type UsuarioDetalle = {
   rol: string | null;
 };
 
+type RolDetalle = {
+  rol: string | null;
+};
+
+type DomiciliarioExistente = {
+  idDomiciliario: number;
+};
+
 function parseId(idStr: string): number | null {
   const n = Number(idStr);
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -34,6 +42,47 @@ async function resolveTargetId(idParam: string): Promise<number | null> {
     return sessionUser?.idusuario ?? null;
   }
   return parseId(idParam);
+}
+
+async function syncDomiciliarioByRole(userId: number, roleId: number) {
+  const { rows: roleRows } = await sql<RolDetalle>(
+    `
+      SELECT rol
+      FROM user_rol
+      WHERE id_rol = $1
+      LIMIT 1;
+    `,
+    [roleId]
+  );
+
+  const roleName = roleRows[0]?.rol?.trim().toLowerCase() ?? null;
+  if (roleName !== 'domiciliario') {
+    return { synced: false, created: false };
+  }
+
+  const { rows: domicilioRows } = await sql<DomiciliarioExistente>(
+    `
+      SELECT id_domiciliario AS "idDomiciliario"
+      FROM public.domiciliario
+      WHERE id_usuario = $1
+      LIMIT 1;
+    `,
+    [userId]
+  );
+
+  if (domicilioRows.length > 0) {
+    return { synced: true, created: false };
+  }
+
+  await sql(
+    `
+      INSERT INTO public.domiciliario (id_usuario)
+      VALUES ($1);
+    `,
+    [userId]
+  );
+
+  return { synced: true, created: true };
 }
 
 // GET
@@ -129,7 +178,17 @@ export async function PUT(req: NextRequest, { params }: { params: UsuarioRoutePa
 
   try {
     await sql(query, valoresActualizar);
-    return NextResponse.json({ ok: true, message: 'Usuario actualizado' });
+
+    let domiciliario = { synced: false, created: false };
+    if (body.id_rol !== undefined) {
+      domiciliario = await syncDomiciliarioByRole(id, Number(body.id_rol));
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: 'Usuario actualizado',
+      domiciliario,
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ ok: false, error: 'Error al actualizar usuario' }, { status: 500 });

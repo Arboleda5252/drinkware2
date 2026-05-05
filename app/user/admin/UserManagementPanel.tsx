@@ -39,6 +39,15 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
+function normalizeRoleName(role: string | null | undefined) {
+  return role?.trim().toLowerCase() ?? "";
+}
+
+function isProtectedAdminRole(role: string | null | undefined) {
+  const normalizedRole = normalizeRoleName(role);
+  return normalizedRole === "admin" || normalizedRole === "administrador";
+}
+
 export function UserManagementPanel() {
   const [query, setQuery] = React.useState("");
   const [filtroRol, setFiltroRol] = React.useState<string>("Todos");
@@ -190,6 +199,34 @@ export function UserManagementPanel() {
     }
   };
 
+  const selectedRoleName = React.useMemo(
+    () => rolesDisponibles.find((r) => r.id_rol === nuevoRolId)?.rol ?? null,
+    [nuevoRolId, rolesDisponibles]
+  );
+  const isAdminLocked = isProtectedAdminRole(usuarioEditar?.rol);
+  const roleChangeWarning = React.useMemo(() => {
+    const currentRole = normalizeRoleName(usuarioEditar?.rol);
+    const nextRole = normalizeRoleName(selectedRoleName);
+
+    if (!nextRole || currentRole === nextRole) {
+      return "Verifica bien el cambio antes de confirmar. Esta accion modifica permisos y accesos dentro del sistema.";
+    }
+
+    if (nextRole === "vendedor") {
+      return "Aviso: al asignar el rol Vendedor, este usuario podra registrar ventas y operar dentro del flujo comercial.";
+    }
+
+    if (nextRole === "domiciliario") {
+      return "Aviso: al asignar el rol Domiciliario, se habilitara su uso en la operacion de entregas y se registrara como domiciliario en la base de datos.";
+    }
+
+    if (nextRole === "proveedor") {
+      return "Aviso: al asignar el rol Proveedor, el usuario quedara orientado a la gestion de productos y pedidos asociados al abastecimiento.";
+    }
+
+    return "Confirma el cambio solo si estas seguro. Esta accion actualiza permisos de acceso en el sistema.";
+  }, [selectedRoleName, usuarioEditar]);
+
   return (
     <section className="mx-auto max-w-6xl space-y-8 text-white">
       {modalVerAbierto && (
@@ -254,7 +291,7 @@ export function UserManagementPanel() {
                 value={nuevoRolId ?? ""}
                 onChange={(e) => setNuevoRolId(Number(e.target.value))}
                 className="w-full appearance-none rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/30"
-                disabled={guardando || cargandoRoles}
+                disabled={guardando || cargandoRoles || isAdminLocked}
                 style={{ colorScheme: "dark" }}
               >
                 <option value="" disabled className="bg-slate-950 text-white">
@@ -266,15 +303,21 @@ export function UserManagementPanel() {
                   </option>
                 ))}
               </select>
-              <p className="mt-3 text-xs leading-6 text-white/60">
-                Esta accion puede modificar sus permisos y accesos dentro del sistema.
-              </p>
+              {isAdminLocked ? (
+                <div className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-6 text-amber-100">
+                  El rol Admin esta protegido. No se permite cambiar este usuario desde este modulo.
+                </div>
+              ) : (
+                <div className="mt-3 rounded-2xl border border-sky-300/15 bg-sky-400/10 px-4 py-3 text-xs leading-6 text-white/75">
+                  {roleChangeWarning}
+                </div>
+              )}
             </div>
             {errorModal && <div className="mb-3 text-sm text-rose-300">{errorModal}</div>}
             <button
               onClick={guardarRol}
               className="flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-300/30 bg-sky-400/15 py-3 font-semibold text-white transition hover:bg-sky-400/25 disabled:opacity-60"
-              disabled={guardando || !nuevoRolId}
+              disabled={guardando || !nuevoRolId || isAdminLocked}
             >
               {guardando ? "Guardando..." : "Confirmar cambio de rol"}
             </button>
@@ -365,11 +408,7 @@ export function UserManagementPanel() {
                       <td className="px-6 py-3">{u.apellido}</td>
                       <td className="px-6 py-3 text-white/70">{u.correo ?? "-"}</td>
                       <td className="px-6 py-3 text-white/70">{u.documento ?? "-"}</td>
-                      <td className="px-6 py-3">
-                        <span className="inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-100">
-                          {u.rol ?? "Sin rol"}
-                        </span>
-                      </td>
+                      <td className="px-6 py-3 text-white/70">{u.rol ?? "Sin rol"}</td>
                       <td className="px-6 py-3">
                         <div className="flex items-center justify-center gap-2">
                           <button
@@ -383,6 +422,7 @@ export function UserManagementPanel() {
                             title="Actualizar rol"
                             onClick={() => editarUsuario(u)}
                             className="rounded-xl border border-white/10 bg-black/20 p-2 text-white/80 transition hover:border-sky-300/30 hover:bg-sky-400/10 hover:text-white"
+                            disabled={isProtectedAdminRole(u.rol)}
                           >
                             <Pencil />
                           </button>
