@@ -134,6 +134,12 @@ function Link_Roles(roleId: number | null | undefined, vendedorActivo?: boolean)
         { href: "/user/vendedor", label: "Gestion de Ventas" },
         { href: "/user/vendedor/pedidos", label: "Pedidos de Clientes" },
       ];
+    case 4:
+      return [
+      ...defaultLinks,
+      { href: "/user/domiciliario", label: "Gestión de Entregas" },
+      { href: "/user/domiciliario/HistorialEntregas", label: "Mis entregas" },
+    ];  
     case 5:
       return [
         ...defaultLinks,
