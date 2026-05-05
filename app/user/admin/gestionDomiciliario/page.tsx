@@ -95,9 +95,9 @@ export default function GestionDomiciliarioPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [savingDomiciliarioId, setSavingDomiciliarioId] = React.useState<number | null>(null);
-  const [savingEntregaId, setSavingEntregaId] = React.useState<number | null>(null);
   const [assigningPedidoId, setAssigningPedidoId] = React.useState<number | null>(null);
   const [activeModal, setActiveModal] = React.useState<ModalType>(null);
+  const [detailPedido, setDetailPedido] = React.useState<DomicilioView | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -272,7 +272,7 @@ export default function GestionDomiciliarioPage() {
           body: JSON.stringify({
             idDomiciliario,
             fechaAsignacion: new Date().toISOString(),
-            estadoEntrega: pedido.entrega.estadoEntrega ?? "asignada",
+            estadoEntrega: "asignada",
           }),
         });
         const json = await res.json();
@@ -309,32 +309,10 @@ export default function GestionDomiciliarioPage() {
     }
   };
 
-  const updateEstadoEntrega = async (entrega: Entrega, estadoEntrega: string) => {
-    setSavingEntregaId(entrega.idEntrega);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/entrega/${entrega.idEntrega}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estadoEntrega }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error ?? `HTTP ${res.status}`);
-      }
-
-      setEntregas((prev) =>
-        prev.map((item) => (item.idEntrega === entrega.idEntrega ? (json.data as Entrega) : item))
-      );
-    } catch (updateError: unknown) {
-      setError(updateError instanceof Error ? updateError.message : "Error al actualizar entrega");
-    } finally {
-      setSavingEntregaId(null);
-    }
+  const closeModal = () => {
+    setActiveModal(null);
+    setDetailPedido(null);
   };
-
-  const closeModal = () => setActiveModal(null);
 
   return (
     <section className="mx-auto max-w-7xl space-y-8 text-white">
@@ -350,7 +328,11 @@ export default function GestionDomiciliarioPage() {
 
       {activeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-3xl rounded-[2rem] border border-white/10 bg-slate-950/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+          <div
+            className={`relative w-full rounded-[2rem] border border-white/10 bg-slate-950/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.5)] ${
+              activeModal === "domicilios" ? "max-w-5xl" : "max-w-3xl"
+            }`}
+          >
             <button
               type="button"
               onClick={closeModal}
@@ -451,94 +433,139 @@ export default function GestionDomiciliarioPage() {
               )}
 
               {activeModal === "domicilios" && (
-                <div className="space-y-4 pr-2">
-                  {domicilios.map((pedido) => {
-                    const entrega = pedido.entrega;
+                <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5">
+                  <div className="overflow-y-auto pr-2">
+                    <table className="w-full table-fixed text-sm">
+                      <thead className="sticky top-0 bg-slate-950 text-left text-white/65">
+                        <tr>
+                          <th className="px-4 py-3 font-semibold">Pedido</th>
+                          <th className="px-4 py-3 font-semibold">Fecha</th>
+                          <th className="px-4 py-3 font-semibold">Domiciliario</th>
+                          <th className="px-4 py-3 font-semibold">Estado entrega</th>
+                          <th className="px-4 py-3 font-semibold">Asignar</th>
+                          <th className="px-4 py-3 font-semibold">Detalle</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/10 text-white/85">
+                        {domicilios.map((pedido) => {
+                          const entrega = pedido.entrega;
+                          const estadoEntrega = entrega?.estadoEntrega ?? "pendiente";
 
-                    return (
-                      <div
-                        key={pedido.idPedido}
-                        className="rounded-[1.5rem] border border-white/10 bg-white/5 px-5 py-4 text-center"
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="sm:text-left">
-                            <p className="text-sm font-semibold text-white">Pedido #{pedido.idPedido}</p>
-                            <p className="mt-1 text-sm text-white/60">Fecha: {formatDate(pedido.fechaCreacion)}</p>
-                          </div>
-                          <div className="sm:text-right">
-                            <p className="text-sm text-white/60">Total</p>
-                            <p className="text-lg font-semibold text-white">
-                              ${pedido.total.toLocaleString("es-CO")}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 grid gap-3 text-sm text-white/75 sm:grid-cols-2">
-                          <div>
-                            <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Estado pedido</span>
-                            {pedido.estadoPedido ?? "-"}
-                          </div>
-                          <div>
-                            <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Domiciliario</span>
-                            {pedido.domiciliarioNombre ?? "Sin asignar"}
-                          </div>
-                          <div>
-                            <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Direccion</span>
-                            {entrega?.direccionEntrega ?? "-"}
-                          </div>
-                          <div>
-                            <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Ciudad</span>
-                            {entrega?.ciudad ?? "-"}
-                          </div>
-                          <div>
-                            <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Contacto</span>
-                            {entrega?.telefonoContacto ?? "-"}
-                          </div>
-                          <div>
-                            <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Estado entrega</span>
-                            {entrega?.estadoEntrega ?? "pendiente"}
-                          </div>
-                        </div>
-
-                        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                          <select
-                            defaultValue={entrega?.idDomiciliario ?? ""}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              if (Number.isInteger(value) && value > 0) {
-                                void assignEntrega(pedido, value);
-                              }
-                            }}
-                            disabled={assigningPedidoId === pedido.idPedido || activeDomiciliarios.length === 0}
-                            className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
-                          >
-                            <option value="">Selecciona un domiciliario</option>
-                            {activeDomiciliarios.map((domiciliario) => (
-                              <option key={domiciliario.idDomiciliario} value={domiciliario.idDomiciliario}>
-                                {domiciliario.nombreCompleto}
-                              </option>
-                            ))}
-                          </select>
-
-                          {entrega && (
-                            <select
-                              value={entrega.estadoEntrega ?? "pendiente"}
-                              onChange={(event) => void updateEstadoEntrega(entrega, event.target.value)}
-                              disabled={savingEntregaId === entrega.idEntrega}
-                              className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
-                            >
-                              <option value="pendiente">pendiente</option>
-                              <option value="asignada">asignada</option>
-                              <option value="en_camino">en_camino</option>
-                              <option value="entregada">entregada</option>
-                            </select>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                          return (
+                            <tr key={pedido.idPedido} className="transition hover:bg-white/6">
+                              <td className="px-4 py-4">
+                                <p className="font-semibold text-white">Pedido #{pedido.idPedido}</p>
+                                <p className="mt-1 text-xs text-white/55">
+                                  {pedido.estadoPedido ?? "Sin estado"}
+                                </p>
+                              </td>
+                              <td className="px-4 py-4 text-white/70">{formatDate(pedido.fechaCreacion)}</td>
+                              <td className="px-4 py-4 text-white/70">{pedido.domiciliarioNombre ?? "Sin asignar"}</td>
+                              <td className="px-4 py-4">
+                                <span className="inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-100">
+                                  {estadoEntrega}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4">
+                                <select
+                                  value={entrega?.idDomiciliario ?? ""}
+                                  onChange={(event) => {
+                                    const value = Number(event.target.value);
+                                    if (Number.isInteger(value) && value > 0) {
+                                      void assignEntrega(pedido, value);
+                                    }
+                                  }}
+                                  disabled={assigningPedidoId === pedido.idPedido || activeDomiciliarios.length === 0}
+                                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
+                                >
+                                  <option value="">Selecciona un domiciliario</option>
+                                  {activeDomiciliarios.map((domiciliario) => (
+                                    <option key={domiciliario.idDomiciliario} value={domiciliario.idDomiciliario}>
+                                      {domiciliario.nombreCompleto}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-4 py-4">
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailPedido(pedido)}
+                                  className="inline-flex rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                                >
+                                  Ver mas
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailPedido && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-[2rem] border border-white/10 bg-slate-950/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+            <button
+              type="button"
+              onClick={() => setDetailPedido(null)}
+              className="absolute right-5 top-5 text-white/45 transition hover:text-white"
+            >
+              X
+            </button>
+
+            <div className="border-b border-white/10 px-6 py-6 sm:px-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-200">Detalle de entrega</p>
+              <h2 className="mt-3 text-center text-2xl font-bold tracking-tight">
+                Pedido #{detailPedido.idPedido}
+              </h2>
+            </div>
+
+            <div className="space-y-4 px-6 py-6 text-sm text-white/75 sm:px-8">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Estado pedido</span>
+                  {detailPedido.estadoPedido ?? "-"}
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Estado entrega</span>
+                  {detailPedido.entrega?.estadoEntrega ?? "pendiente"}
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Direccion</span>
+                  {detailPedido.entrega?.direccionEntrega ?? "-"}
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Ciudad</span>
+                  {detailPedido.entrega?.ciudad ?? "-"}
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Contacto</span>
+                  {detailPedido.entrega?.telefonoContacto ?? "-"}
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Recibe</span>
+                  {detailPedido.entrega?.nombreRecibe ?? "-"}
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Fecha programada</span>
+                  {formatDate(detailPedido.entrega?.fechaProgramada ?? null)}
+                </div>
+                <div>
+                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Costo envio</span>
+                  ${Number(detailPedido.entrega?.costoEnvio ?? 0).toLocaleString("es-CO")}
+                </div>
+              </div>
+
+              <div>
+                <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Observacion</span>
+                {detailPedido.entrega?.observacion ?? "-"}
+              </div>
             </div>
           </div>
         </div>
