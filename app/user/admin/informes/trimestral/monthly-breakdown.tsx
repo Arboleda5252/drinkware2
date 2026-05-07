@@ -1,4 +1,5 @@
 import { sql } from "@/app/Datalibs/database";
+import { FiShoppingBag, FiTruck } from "react-icons/fi";
 
 interface MonthlyBreakdownProps {
   quarter: number;
@@ -85,21 +86,27 @@ export default async function MonthlySalesBreakdown({ quarter, year }: MonthlyBr
               </div>
               <div className="col-span-1 sm:col-span-1">
                 <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">Ventas</p>
-                <p className="mt-2 text-lg font-bold text-sky-300">${month.revenue.toLocaleString()}</p>
+                <p className="mt-2 text-lg font-bold text-sky-300">${month.revenue.toLocaleString("es-CO")}</p>
               </div>
               <div className="col-span-1 sm:col-span-1">
                 <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">Pedidos</p>
-                <p className="mt-2 text-lg font-bold text-white">{month.orders}</p>
+                <p className="mt-2 text-lg font-bold text-white">{month.orders.toLocaleString("es-CO")}</p>
               </div>
               <div className="col-span-1 sm:col-span-1">
-                <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">Ticket Prom.</p>
-                <p className="mt-2 text-lg font-bold text-white">${month.avgTicket}</p>
+                <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">Ticket Promedio</p>
+                <p className="mt-2 text-lg font-bold text-white">${month.avgTicket.toLocaleString("es-CO")}</p>
               </div>
               <div className="col-span-1 sm:col-span-1">
-                <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">Envíos</p>
-                <p className="mt-2 text-xs space-y-1">
-                  <span className="block text-slate-300">🚚 {month.delivery} dom.</span>
-                  <span className="block text-slate-300">🏪 {month.pickUp} retiro</span>
+                <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">Entregas</p>
+                <p className="mt-2 text-xs space-y-2">
+                  <span className="flex items-center gap-2 text-slate-300">
+                    <FiTruck className="h-4 w-4 text-sky-300" />
+                    {month.delivery.toLocaleString("es-CO")} domicilio
+                  </span>
+                  <span className="flex items-center gap-2 text-slate-300">
+                    <FiShoppingBag className="h-4 w-4 text-emerald-300" />
+                    {month.pickUp.toLocaleString("es-CO")} retiro en tienda
+                  </span>
                 </p>
               </div>
             </div>

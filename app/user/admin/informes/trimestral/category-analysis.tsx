@@ -72,7 +72,9 @@ export default async function CategoryAnalysis({ quarter, year }: CategoryAnalys
           <div key={category.category} className="rounded-2xl border border-slate-800/50 bg-slate-950/50 p-5">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">{category.category}</p>
+                <p className="text-sm text-slate-400 uppercase tracking-[0.15em]">
+                  {category.category === "Otros" ? "Ventas en mostrador" : category.category}
+                </p>
                 <p className="mt-2 text-2xl font-bold text-sky-300">${category.revenue.toLocaleString()}</p>
               </div>
               <div className="text-right">

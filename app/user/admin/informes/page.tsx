@@ -8,10 +8,10 @@ const reports = [
     badge: "Trimestre",
   },
   {
-    title: "Informe por producto",
-    description: "Visualiza el rendimiento de cada línea de licores.",
+    title: "Inventario de productos",
+    description: "Visualiza la rotación y el estado del inventario por producto.",
     href: "/user/admin/informes/productos",
-    badge: "Producto",
+    badge: "Inventario",
   },
   {
     title: "Informe por cliente",
@@ -86,10 +86,13 @@ export default function InformesPage() {
               Como administrador y dueño, necesitas ver el pulso del negocio al instante: rotación de botellas, margen de marcas premium y demanda por categoría.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-slate-950/70 p-5 ring-1 ring-slate-700/60">
-                <p className="text-sm font-semibold text-slate-200">Rotación de inventario</p>
-                <p className="mt-2 text-sm text-slate-400">Detecta cuáles botellas se venden rápido y evita quiebres de stock.</p>
-              </div>
+              <Link
+                href="/user/admin/informes/productos"
+                className="group rounded-3xl bg-slate-950/70 p-5 ring-1 ring-slate-700/60 transition hover:ring-sky-400/50 hover:bg-slate-900/50 cursor-pointer"
+              >
+                <p className="text-sm font-semibold text-slate-200 group-hover:text-sky-300 transition">Inventario de productos</p>
+                <p className="mt-2 text-sm text-slate-400 group-hover:text-slate-300 transition">Visualiza la rotación y el estado de tu inventario por producto.</p>
+              </Link>
               <div className="rounded-3xl bg-slate-950/70 p-5 ring-1 ring-slate-700/60">
                 <p className="text-sm font-semibold text-slate-200">Ventas por categoría</p>
                 <p className="mt-2 text-sm text-slate-400">Conoce qué segmentos de la tienda generan mayor margen.</p>

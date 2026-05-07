@@ -243,7 +243,7 @@ export default function ProductReportShell({ summary, topProducts, initialProduc
 
   const downloadPDF = () => {
     const lines = [
-      `Informe por producto`,
+      `INVENTARIO de productos`,
       ``,
       `Producto: ${activeProduct.name}`,
       `Categoría: ${activeProduct.category}`,
