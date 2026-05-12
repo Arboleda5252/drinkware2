@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { FaSpinner } from "react-icons/fa";
+import AsignarDomicilio from "./asignarDomicilio";
+import HorarioDomiciliario from "./horarioDomiciliario";
 
 type Domiciliario = {
   idDomiciliario: number;
@@ -98,6 +100,7 @@ export default function GestionDomiciliarioPage() {
   const [assigningPedidoId, setAssigningPedidoId] = React.useState<number | null>(null);
   const [activeModal, setActiveModal] = React.useState<ModalType>(null);
   const [detailPedido, setDetailPedido] = React.useState<DomicilioView | null>(null);
+  const [horarioDomiciliario, setHorarioDomiciliario] = React.useState<DomiciliarioView | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -249,7 +252,11 @@ export default function GestionDomiciliarioPage() {
       setDomiciliarios((prev) =>
         prev.map((item) =>
           item.idDomiciliario === domiciliario.idDomiciliario
-            ? { ...item, estadoLaboral: json.data.estadoLaboral as string }
+            ? {
+                ...item,
+                estadoLaboral: json.data.estadoLaboral as string,
+                disponibilidadManual: json.data.disponibilidadManual as string,
+              }
             : item
         )
       );
@@ -312,12 +319,12 @@ export default function GestionDomiciliarioPage() {
   const closeModal = () => {
     setActiveModal(null);
     setDetailPedido(null);
+    setHorarioDomiciliario(null);
   };
 
   return (
     <section className="mx-auto max-w-7xl space-y-8 text-white">
       <header className="rounded-[2rem] border border-white/10 bg-white/10 p-6 text-center shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-200">Operaciones</p>
         <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
           Gestion de domiciliarios y entregas
         </h1>
@@ -330,7 +337,11 @@ export default function GestionDomiciliarioPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
           <div
             className={`relative w-full rounded-[2rem] border border-white/10 bg-slate-950/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.5)] ${
-              activeModal === "domicilios" ? "max-w-5xl" : "max-w-3xl"
+              activeModal === "domicilios"
+                ? "max-w-5xl"
+                : activeModal === "domiciliarios"
+                  ? "max-w-6xl"
+                  : "max-w-3xl"
             }`}
           >
             <button
@@ -362,28 +373,29 @@ export default function GestionDomiciliarioPage() {
               {activeModal === "domiciliarios" && (
                 <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5">
                   <div className="overflow-y-auto pr-2">
-                    <table className="w-full table-fixed text-sm">
+                    <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-slate-950 text-left text-white/65">
                         <tr>
-                          <th className="px-6 py-3 font-semibold">Nombre</th>
-                          <th className="px-6 py-3 font-semibold">Correo</th>
-                          <th className="px-6 py-3 font-semibold">Documento</th>
-                          <th className="px-6 py-3 font-semibold">Estado laboral</th>
-                          <th className="px-6 py-3 font-semibold">Disponibilidad</th>
+                          <th className="w-[18%] px-6 py-3 font-semibold">Nombre</th>
+                          <th className="w-[24%] px-6 py-3 font-semibold">Correo</th>
+                          <th className="w-[12%] px-6 py-3 font-semibold">Documento</th>
+                          <th className="w-[16%] px-6 py-3 font-semibold">Estado laboral</th>
+                          <th className="w-[14%] px-6 py-3 font-semibold">Disponibilidad</th>
+                          <th className="w-[16%] px-6 py-3 font-semibold">Horarios</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/10 text-white/85">
                         {domiciliariosView.map((domiciliario) => (
                           <tr key={domiciliario.idDomiciliario} className="transition hover:bg-white/6">
-                            <td className="px-6 py-4">{domiciliario.nombreCompleto}</td>
-                            <td className="px-6 py-4 text-white/70">{domiciliario.correo ?? "-"}</td>
-                            <td className="px-6 py-4 text-white/70">{domiciliario.documento ?? "-"}</td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 align-middle">{domiciliario.nombreCompleto}</td>
+                            <td className="px-6 py-4 align-middle text-white/70">{domiciliario.correo ?? "-"}</td>
+                            <td className="px-6 py-4 align-middle text-white/70">{domiciliario.documento ?? "-"}</td>
+                            <td className="px-6 py-4 align-middle">
                               <select
                                 value={domiciliario.estadoLaboral}
                                 onChange={(event) => updateEstadoLaboral(domiciliario, event.target.value)}
                                 disabled={savingDomiciliarioId === domiciliario.idDomiciliario}
-                                className="rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
+                                className="w-full min-w-[130px] rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-2 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
                               >
                                 {ESTADOS_LABORALES.map((estado) => (
                                   <option key={estado} value={estado}>
@@ -392,7 +404,16 @@ export default function GestionDomiciliarioPage() {
                                 ))}
                               </select>
                             </td>
-                            <td className="px-6 py-4 text-white/70">{domiciliario.disponibilidadManual}</td>
+                            <td className="px-6 py-4 align-middle text-white/70">{domiciliario.disponibilidadManual}</td>
+                            <td className="px-6 py-4 align-middle">
+                              <button
+                                type="button"
+                                onClick={() => setHorarioDomiciliario(domiciliario)}
+                                className="inline-flex rounded-2xl border border-cyan-200/70 bg-cyan-500 px-5 py-3 text-xs font-bold text-white transition hover:scale-[1.02] hover:bg-cyan-400"
+                              >
+                                Asignar Horarios
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -433,75 +454,16 @@ export default function GestionDomiciliarioPage() {
               )}
 
               {activeModal === "domicilios" && (
-                <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/5">
-                  <div className="overflow-y-auto pr-2">
-                    <table className="w-full table-fixed text-sm">
-                      <thead className="sticky top-0 bg-slate-950 text-left text-white/65">
-                        <tr>
-                          <th className="px-4 py-3 font-semibold">Pedido</th>
-                          <th className="px-4 py-3 font-semibold">Fecha</th>
-                          <th className="px-4 py-3 font-semibold">Domiciliario</th>
-                          <th className="px-4 py-3 font-semibold">Estado entrega</th>
-                          <th className="px-4 py-3 font-semibold">Asignar</th>
-                          <th className="px-4 py-3 font-semibold">Detalle</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/10 text-white/85">
-                        {domicilios.map((pedido) => {
-                          const entrega = pedido.entrega;
-                          const estadoEntrega = entrega?.estadoEntrega ?? "pendiente";
-
-                          return (
-                            <tr key={pedido.idPedido} className="transition hover:bg-white/6">
-                              <td className="px-4 py-4">
-                                <p className="font-semibold text-white">Pedido #{pedido.idPedido}</p>
-                                <p className="mt-1 text-xs text-white/55">
-                                  {pedido.estadoPedido ?? "Sin estado"}
-                                </p>
-                              </td>
-                              <td className="px-4 py-4 text-white/70">{formatDate(pedido.fechaCreacion)}</td>
-                              <td className="px-4 py-4 text-white/70">{pedido.domiciliarioNombre ?? "Sin asignar"}</td>
-                              <td className="px-4 py-4">
-                                <span className="inline-flex rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-100">
-                                  {estadoEntrega}
-                                </span>
-                              </td>
-                              <td className="px-4 py-4">
-                                <select
-                                  value={entrega?.idDomiciliario ?? ""}
-                                  onChange={(event) => {
-                                    const value = Number(event.target.value);
-                                    if (Number.isInteger(value) && value > 0) {
-                                      void assignEntrega(pedido, value);
-                                    }
-                                  }}
-                                  disabled={assigningPedidoId === pedido.idPedido || activeDomiciliarios.length === 0}
-                                  className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/25"
-                                >
-                                  <option value="">Selecciona un domiciliario</option>
-                                  {activeDomiciliarios.map((domiciliario) => (
-                                    <option key={domiciliario.idDomiciliario} value={domiciliario.idDomiciliario}>
-                                      {domiciliario.nombreCompleto}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-4 py-4">
-                                <button
-                                  type="button"
-                                  onClick={() => setDetailPedido(pedido)}
-                                  className="inline-flex rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-                                >
-                                  Ver mas
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <AsignarDomicilio
+                  domicilios={domicilios}
+                  activeDomiciliarios={activeDomiciliarios}
+                  assigningPedidoId={assigningPedidoId}
+                  formatDate={formatDate}
+                  onAssignEntrega={(pedido, idDomiciliario) => {
+                    void assignEntrega(pedido, idDomiciliario);
+                  }}
+                  onViewDetail={setDetailPedido}
+                />
               )}
             </div>
           </div>
@@ -571,6 +533,17 @@ export default function GestionDomiciliarioPage() {
         </div>
       )}
 
+      {horarioDomiciliario && (
+        <HorarioDomiciliario
+          domiciliario={{
+            idDomiciliario: horarioDomiciliario.idDomiciliario,
+            nombreCompleto: horarioDomiciliario.nombreCompleto,
+            disponibilidadManual: horarioDomiciliario.disponibilidadManual,
+          }}
+          onClose={() => setHorarioDomiciliario(null)}
+        />
+      )}
+
       {error && (
         <div className="rounded-[2rem] border border-rose-300/20 bg-rose-400/10 px-5 py-4 text-sm text-rose-200">
           {error}
@@ -579,37 +552,37 @@ export default function GestionDomiciliarioPage() {
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="flex min-h-[220px] flex-col rounded-[2rem] border border-white/10 bg-white/10 p-6 text-center shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-md">
-          <p className="text-xs uppercase tracking-[0.24em] text-sky-200/90">Domiciliarios</p>
+          <p className="text-base font-medium uppercase tracking-[0.24em] text-sky-200/90">Domiciliarios</p>
           <p className="mx-auto mt-4 max-w-sm flex-1 text-sm leading-6 text-white/65">Consulta el listado de domiciliarios disponibles y revisa cuáles se encuentran activos actualmente.</p>
           <button
             type="button"
             onClick={() => setActiveModal("domiciliarios")}
-            className="mt-6 inline-flex min-h-[44px] items-center justify-center self-center rounded-2xl border border-sky-300/20 bg-sky-400/10 px-4 py-2 font-semibold text-sky-100 transition hover:bg-sky-400/20"
+            className="mt-6 inline-flex min-h-[52px] items-center justify-center self-center rounded-2xl border border-cyan-200/70 bg-cyan-500 px-6 py-3 text-lg font-extrabold text-white transition hover:scale-[1.02] hover:bg-cyan-400"
           >
             Ver listado de domiciliarios
           </button>
         </div>
 
         <div className="flex min-h-[220px] flex-col rounded-[2rem] border border-white/10 bg-white/10 p-6 text-center shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-md">
-          <p className="text-xs uppercase tracking-[0.24em] text-emerald-200/90">Retiros en tienda</p>
+          <p className="text-base font-medium uppercase tracking-[0.24em] text-emerald-200/90">Retiros en tienda</p>
           <p className="mx-auto mt-4 max-w-sm flex-1 text-sm leading-6 text-white/65">Listado de pedidos retirados o pendientes</p>
           <button
             type="button"
             onClick={() => setActiveModal("retiros")}
-            className="mt-6 inline-flex min-h-[44px] items-center justify-center self-center rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-2 font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
+            className="mt-6 inline-flex min-h-[52px] items-center justify-center self-center rounded-2xl border border-sky-200/70 bg-amber-500 px-6 py-3 text-lg font-extrabold text-white transition hover:scale-[1.02] hover:bg-sky-400"
           >
             Ver retiros en tienda
           </button>
         </div>
 
         <div className="flex min-h-[220px] flex-col rounded-[2rem] border border-white/10 bg-white/10 p-6 text-center shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-md">
-          <p className="text-xs uppercase tracking-[0.24em] text-amber-200/90">Domicilios</p>
+          <p className="text-base font-medium uppercase tracking-[0.24em] text-amber-200/90">Domicilios</p>
           <p className="mx-auto mt-4 max-w-sm flex-1 text-sm leading-6 text-white/65">Consulta las entregas a domicilio pendientes de asignación y haz seguimiento.
           </p>
           <button
             type="button"
             onClick={() => setActiveModal("domicilios")}
-            className="mt-6 inline-flex min-h-[44px] items-center justify-center self-center rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-2 font-semibold text-amber-100 transition hover:bg-amber-400/20"
+            className="mt-6 inline-flex min-h-[52px] items-center justify-center self-center rounded-2xl border border-cyan-200/70 bg-cyan-500 px-6 py-3 text-lg font-extrabold text-white transition hover:scale-[1.02] hover:bg-cyan-400"
           >
             Asignar domiciliario
           </button>

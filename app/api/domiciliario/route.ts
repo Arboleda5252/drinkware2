@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DatabaseError } from "pg";
 import { sql } from "@/app/Datalibs/database";
+import { applyComputedDisponibilidad } from "./availability";
 
 export const runtime = "nodejs";
 
@@ -56,6 +57,16 @@ function validateShortText(value: string, field: string) {
   return null;
 }
 
+function normalizeDisponibilidadManual(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "desconectado") return "Desconectado";
+  if (normalized === "disponible") return "Disponible";
+  if (normalized === "ocupado") return "Ocupado";
+
+  return value.trim();
+}
+
 const connectionErrorCodes = new Set(["ECONNREFUSED", "ENOTFOUND", "ECONNRESET", "ETIMEDOUT"]);
 
 function mapDatabaseError(error: unknown, fallbackMessage: string) {
@@ -100,7 +111,8 @@ function mapDatabaseError(error: unknown, fallbackMessage: string) {
 export async function GET() {
   try {
     const { rows } = await sql<DomiciliarioRow>(`${baseSelect} ORDER BY id_domiciliario ASC;`);
-    return NextResponse.json({ ok: true, data: rows.map(toDto) });
+    const rowsWithDisponibilidad = await applyComputedDisponibilidad(rows);
+    return NextResponse.json({ ok: true, data: rowsWithDisponibilidad.map(toDto) });
   } catch (error) {
     console.error("[GET /api/domiciliario]", error);
     return NextResponse.json(
@@ -130,8 +142,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: estadoLaboralError }, { status: 400 });
     }
 
-    const disponibilidadManual =
-      readText(body?.disponibilidadManual ?? body?.disponibilidad_manual) || "Desconectado";
+    const disponibilidadManual = normalizeDisponibilidadManual(
+      readText(body?.disponibilidadManual ?? body?.disponibilidad_manual) || "Desconectado"
+    );
     const disponibilidadError = validateShortText(
       disponibilidadManual,
       "disponibilidad_manual"
@@ -158,7 +171,8 @@ export async function POST(req: NextRequest) {
       [idUsuario, estadoLaboral, disponibilidadManual, observaciones]
     );
 
-    return NextResponse.json({ ok: true, data: toDto(rows[0]) }, { status: 201 });
+    const [rowWithDisponibilidad] = await applyComputedDisponibilidad(rows);
+    return NextResponse.json({ ok: true, data: toDto(rowWithDisponibilidad) }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/domiciliario]", error);
     const { message, status } = mapDatabaseError(error, "Error al crear domiciliario");

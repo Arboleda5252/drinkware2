@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DatabaseError } from "pg";
 import { sql } from "@/app/Datalibs/database";
+import { applyComputedDisponibilidad } from "../availability";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,16 @@ function validateShortText(value: string, field: string) {
   }
 
   return null;
+}
+
+function normalizeDisponibilidadManual(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "desconectado") return "Desconectado";
+  if (normalized === "disponible") return "Disponible";
+  if (normalized === "ocupado") return "Ocupado";
+
+  return value.trim();
 }
 
 const connectionErrorCodes = new Set(["ECONNREFUSED", "ENOTFOUND", "ECONNRESET", "ETIMEDOUT"]);
@@ -118,7 +129,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
       );
     }
 
-    return NextResponse.json({ ok: true, data: toDto(rows[0]) });
+    const [rowWithDisponibilidad] = await applyComputedDisponibilidad(rows);
+    return NextResponse.json({ ok: true, data: toDto(rowWithDisponibilidad) });
   } catch (error) {
     console.error("[GET /api/domiciliario/:id]", error);
     return NextResponse.json(
@@ -177,8 +189,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       body?.disponibilidadManual !== undefined ||
       body?.disponibilidad_manual !== undefined
     ) {
-      const disponibilidadManual = readText(
-        body?.disponibilidadManual ?? body?.disponibilidad_manual
+      const disponibilidadManual = normalizeDisponibilidadManual(
+        readText(body?.disponibilidadManual ?? body?.disponibilidad_manual)
       );
       const disponibilidadError = validateShortText(
         disponibilidadManual,
@@ -225,7 +237,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       );
     }
 
-    return NextResponse.json({ ok: true, data: toDto(rows[0]) });
+    const [rowWithDisponibilidad] = await applyComputedDisponibilidad(rows);
+    return NextResponse.json({ ok: true, data: toDto(rowWithDisponibilidad) });
   } catch (error) {
     console.error("[PUT /api/domiciliario/:id]", error);
     const { message, status } = mapDatabaseError(error, "Error al actualizar domiciliario");
