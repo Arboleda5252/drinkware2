@@ -1,9 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FaSpinner, FaClipboardCheck } from "react-icons/fa";
-import { useRouter } from "next/navigation";
-import { FaBan } from "react-icons/fa";
+import { FaSpinner, FaClipboardCheck, FaBan } from "react-icons/fa";
 import { MdEventAvailable } from "react-icons/md";
 import Image from "next/image";
 
@@ -26,17 +24,14 @@ type ProductoDetalle = Producto & {
 };
 
 const ICON = "h-4 w-4";
+
 const Eye = () => (
   <svg className={ICON} viewBox="0 0 24 24" fill="none">
     <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" stroke="currentColor" strokeWidth="2" />
     <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
   </svg>
 );
-const Trash = () => (
-  <svg className={ICON} viewBox="0 0 24 24" fill="none">
-    <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" stroke="currentColor" strokeWidth="2" />
-  </svg>
-);
+
 const Search = () => (
   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
     <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
@@ -44,18 +39,34 @@ const Search = () => (
   </svg>
 );
 
-const MONEDA = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+const MONEDA = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
+
+const overlayClass =
+  "fixed inset-0 z-50 flex justify-center bg-slate-950/75 px-4 backdrop-blur-sm";
+const modalClass =
+  "relative rounded-[2rem] border border-white/10 bg-slate-950/95 p-6 shadow-[0_30px_80px_rgba(0,0,0,0.45)]";
+const closeButtonClass =
+  "absolute right-4 top-4 rounded-full border border-white/10 px-3 py-1 text-sm font-semibold text-white/60 transition hover:border-white/20 hover:bg-white/10 hover:text-white";
+const panelClass =
+  "rounded-[2rem] border border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-md";
+const actionButtonClass =
+  "rounded-xl border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-sky-300/30 hover:bg-white/10 hover:text-white disabled:opacity-50";
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function ProductsPage() {
-  const router = useRouter();
-
   const [query, setQuery] = React.useState("");
   const [filtroCategoria, setFiltroCategoria] = React.useState<string>("Todas");
   const [productos, setProductos] = React.useState<Producto[]>([]);
   const [cargando, setCargando] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Modal Info e Inactivar
   const [modalVerAbierto, setModalVerAbierto] = React.useState(false);
   const [productoVer, setProductoVer] = React.useState<ProductoDetalle | null>(null);
   const [modalInactivarAbierto, setModalInactivarAbierto] = React.useState(false);
@@ -81,19 +92,21 @@ export default function ProductsPage() {
         const res = await fetch("/api/productos", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        if (!json?.ok) throw new Error(json?.error ?? "Respuesta inválida");
+        if (!json?.ok) throw new Error(json?.error ?? "Respuesta invalida");
         if (!cancelado) setProductos(json.data as Producto[]);
-      } catch (e: any) {
-        if (!cancelado) setError(e?.message ?? "Error al cargar productos");
+      } catch (error: unknown) {
+        if (!cancelado) setError(getErrorMessage(error, "Error al cargar productos"));
       } finally {
         if (!cancelado) setCargando(false);
       }
     })();
-    return () => { cancelado = true; };
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   const categorias = React.useMemo(() => {
-    const set = new Set<string>(productos.map(p => p.categoria ?? "Sin categoría"));
+    const set = new Set<string>(productos.map((p) => p.categoria ?? "Sin categoria"));
     return ["Todas", ...Array.from(set).sort((a, b) => a.localeCompare(b, "es"))];
   }, [productos]);
 
@@ -102,13 +115,20 @@ export default function ProductsPage() {
     return productos
       .filter((p) => (p.estados ?? "").toLowerCase() === "disponible")
       .filter((p) => {
-        const texto = [p.nombre ?? "", p.categoria ?? "Sin categoría", String(p.precio ?? ""), String(p.stock ?? "")]
-          .join(" ").toLowerCase();
+        const texto = [
+          p.nombre ?? "",
+          p.categoria ?? "Sin categoria",
+          String(p.precio ?? ""),
+          String(p.stock ?? ""),
+        ]
+          .join(" ")
+          .toLowerCase();
         const coincideTexto = q ? texto.includes(q) : true;
-        const coincideCat = filtroCategoria === "Todas" ? true : (p.categoria ?? "Sin categoría") === filtroCategoria;
+        const coincideCat = filtroCategoria === "Todas" ? true : (p.categoria ?? "Sin categoria") === filtroCategoria;
         return coincideTexto && coincideCat;
       });
   }, [productos, query, filtroCategoria]);
+
   const inactivos = React.useMemo(
     () => productos.filter((p) => (p.estados ?? "").toLowerCase() === "inactivo"),
     [productos]
@@ -122,7 +142,6 @@ export default function ProductsPage() {
     [productos]
   );
 
-  // Ver producto 
   const verProducto = async (p: Producto) => {
     setProductoVer(null);
     setModalVerAbierto(true);
@@ -138,9 +157,12 @@ export default function ProductsPage() {
       setProductoVer({ ...p, descripcion: null, imagen: null, id_proveedor: null });
     }
   };
-  const cerrarModalVer = () => { setModalVerAbierto(false); setProductoVer(null); };
 
-  // Modal de inactivar 
+  const cerrarModalVer = () => {
+    setModalVerAbierto(false);
+    setProductoVer(null);
+  };
+
   const abrirInactivar = (p: Producto) => {
     setProductoInactivar(p);
     setErrorInactivar(null);
@@ -165,7 +187,6 @@ export default function ProductsPage() {
     setActivandoId(null);
   };
 
-  // Modal de no disponibles
   const abrirModalNoDisponibles = () => {
     setErrorActivar(null);
     setModalNoDisponiblesAbierto(true);
@@ -176,8 +197,7 @@ export default function ProductsPage() {
     setErrorActivar(null);
     setActivandoId(null);
   };
-  
-  // Modal de pedido
+
   const abrirModalPedido = (p: Producto) => {
     setProductoPedido(p);
     setCantidadPedido("");
@@ -220,17 +240,13 @@ export default function ProductsPage() {
         throw new Error(json?.error ?? `HTTP ${res.status}`);
       }
 
-      setProductos((prev) =>
-        prev.map((p) =>
-          p.id === productoPedido.id ? { ...p, pedidos: true } : p
-        )
-      );
+      setProductos((prev) => prev.map((p) => (p.id === productoPedido.id ? { ...p, pedidos: true } : p)));
       setProductoPedido((prev) => (prev ? { ...prev, pedidos: true } : prev));
 
       setExitoPedido("Solicitud enviada");
       setCantidadPedido("");
-    } catch (e: any) {
-      setErrorPedido(e?.message ?? "No fue posible enviar la solicitud.");
+    } catch (error: unknown) {
+      setErrorPedido(getErrorMessage(error, "No fue posible enviar la solicitud."));
     } finally {
       setGuardandoPedido(false);
     }
@@ -249,13 +265,13 @@ export default function ProductsPage() {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json?.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
 
-      setProductos(prev =>
-        prev.map(p => p.id === productoInactivar.id ? { ...p, estados: "Inactivo" } : p)
+      setProductos((prev) =>
+        prev.map((p) => (p.id === productoInactivar.id ? { ...p, estados: "Inactivo" } : p))
       );
 
       cerrarInactivar();
-    } catch (e: any) {
-      setErrorInactivar(e?.message ?? "Error al descontinuar el producto");
+    } catch (error: unknown) {
+      setErrorInactivar(getErrorMessage(error, "Error al descontinuar el producto"));
     } finally {
       setGuardandoInactivar(false);
     }
@@ -275,54 +291,46 @@ export default function ProductsPage() {
         throw new Error(json?.error ?? `HTTP ${res.status}`);
       }
 
-      setProductos((prev) =>
-        prev.map((p) =>
-          p.id === producto.id ? { ...p, estados: "Disponible" } : p
-        )
-      );
-    } catch (e: any) {
-      setErrorActivar(e?.message ?? "Error al activar el producto");
+      setProductos((prev) => prev.map((p) => (p.id === producto.id ? { ...p, estados: "Disponible" } : p)));
+    } catch (error: unknown) {
+      setErrorActivar(getErrorMessage(error, "Error al activar el producto"));
     } finally {
       setActivandoId(null);
     }
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6">
+    <main className="min-h-screen px-4 py-6 sm:px-6">
       {modalPedidoAbierto && productoPedido && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
-            <button
-              type="button"
-              onClick={cerrarModalPedido}
-              className="absolute top-3 right-3 rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-            >
+        <div className={`${overlayClass} items-center`}>
+          <div className={`${modalClass} w-full max-w-md`}>
+            <button type="button" onClick={cerrarModalPedido} className={closeButtonClass}>
               X
             </button>
 
-            <h2 className="text-xl font-semibold text-center text-gray-900">Solicitar pedido</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              Producto: <span className="font-semibold text-gray-900">{productoPedido.nombre}</span>
+            <h2 className="text-center text-xl font-semibold text-white">Solicitar pedido</h2>
+            <p className="mt-2 text-sm text-white/70">
+              Producto: <span className="font-semibold text-white">{productoPedido.nombre}</span>
             </p>
-            <p className="text-sm text-gray-600">
-              Stock actual: <span className="font-semibold text-gray-900">{productoPedido.stock}</span>
+            <p className="text-sm text-white/70">
+              Stock actual: <span className="font-semibold text-white">{productoPedido.stock}</span>
             </p>
 
             {errorPedido && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                 {errorPedido}
               </div>
             )}
 
             {exitoPedido && (
-              <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+              <div className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
                 {exitoPedido}
               </div>
             )}
 
             <form onSubmit={enviarPedido} className="mt-4 space-y-4">
               <div className="space-y-1">
-                <label htmlFor="cantidadPedido" className="text-sm font-medium text-gray-700">
+                <label htmlFor="cantidadPedido" className="text-sm font-medium text-white/80">
                   Cantidad a solicitar
                 </label>
                 <input
@@ -334,23 +342,22 @@ export default function ProductsPage() {
                   value={cantidadPedido}
                   onChange={(event) => setCantidadPedido(event.target.value)}
                   placeholder="0"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-sky-300/40 focus:bg-white/10 focus:ring-2 focus:ring-sky-300/20"
                 />
-                
               </div>
 
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={cerrarModalPedido}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+                  className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={guardandoPedido}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-70"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:opacity-70"
                 >
                   {guardandoPedido && <FaSpinner className="h-4 w-4 animate-spin" />}
                   Enviar solicitud
@@ -362,24 +369,22 @@ export default function ProductsPage() {
       )}
 
       {modalNoDisponiblesAbierto && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 py-10">
-          <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-lg">
+        <div className={`${overlayClass} items-start py-10`}>
+          <div className={`${modalClass} w-full max-w-3xl`}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Añadir nuevo producto</h2>
-                <p className="text-sm text-gray-500 py-2">Selecciona un nuevo producto para que esté disponible en el catálogo</p>
+                <h2 className="text-xl font-semibold text-white">Añadir nuevo producto</h2>
+                <p className="py-2 text-sm text-white/65">
+                  Selecciona un nuevo producto para que este disponible en el catalogo
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={cerrarModalNoDisponibles}
-                className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-              >
+              <button type="button" onClick={cerrarModalNoDisponibles} className={closeButtonClass}>
                 X
               </button>
             </div>
 
             {errorActivar && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                 {errorActivar}
               </div>
             )}
@@ -387,46 +392,40 @@ export default function ProductsPage() {
             <div className="mt-4 max-h-[60vh] overflow-y-auto">
               {noDisponibles.length > 0 ? (
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-gray-600">
+                  <thead className="bg-white/5 text-left text-white/65">
                     <tr>
                       <th className="px-4 py-2 font-semibold">Producto</th>
-                      <th className="px-4 py-2 font-semibold">Categoría</th>
+                      <th className="px-4 py-2 font-semibold">Categoria</th>
                       <th className="px-4 py-2 font-semibold">Precio</th>
                       <th className="px-4 py-2 font-semibold">Stock</th>
-                      <th className="px-4 py-2 font-semibold">Descripción</th>
+                      <th className="px-4 py-2 font-semibold">Descripcion</th>
                       <th className="px-4 py-2 font-semibold">Imagen</th>
-                      <th className="px-4 py-2 font-semibold text-right">Acciones</th>
+                      <th className="px-4 py-2 text-right font-semibold">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-white/10 text-white/85">
                     {noDisponibles.map((p) => (
-                      <tr key={p.id} className="hover:bg-gray-50">
-                        <td className="px-4 text-center py-2">{p.nombre}</td>
-                        <td className="px-4 py-2">{p.categoria ?? "Sin categoría"}</td>
+                      <tr key={p.id} className="transition hover:bg-white/5">
+                        <td className="px-4 py-2 text-center">{p.nombre}</td>
+                        <td className="px-4 py-2">{p.categoria ?? "Sin categoria"}</td>
                         <td className="px-4 py-2">{MONEDA.format(p.precio)}</td>
                         <td className="px-4 py-2">{p.stock}</td>
-                        <td className="px-4 py-2 text-xs max-w-[220px] text-gray-600">
+                        <td className="max-w-[220px] px-4 py-2 text-xs text-white/60">
                           {p.descripcion ? (
                             <span title={p.descripcion}>
-                              {p.descripcion.length > 90 ? `${p.descripcion.slice(0, 90)}…` : p.descripcion}
+                              {p.descripcion.length > 90 ? `${p.descripcion.slice(0, 90)}...` : p.descripcion}
                             </span>
                           ) : (
-                            <span className="italic text-gray-400">Sin descripción</span>
+                            <span className="italic text-white/35">Sin descripcion</span>
                           )}
                         </td>
                         <td className="px-4 py-2">
                           {p.imagen ? (
-                            <div className="relative h-14 w-14 overflow-hidden rounded-md border border-gray-200">
-                              <Image
-                                src={p.imagen}
-                                alt={p.nombre}
-                                fill
-                                className="object-cover"
-                                sizes="56px"
-                              />
+                            <div className="relative h-14 w-14 overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                              <Image src={p.imagen} alt={p.nombre} fill className="object-cover" sizes="56px" />
                             </div>
                           ) : (
-                            <span className="text-xs italic text-gray-400">Sin imagen</span>
+                            <span className="text-xs italic text-white/35">Sin imagen</span>
                           )}
                         </td>
                         <td className="px-4 py-2 text-right">
@@ -434,7 +433,7 @@ export default function ProductsPage() {
                             type="button"
                             onClick={() => activarProducto(p)}
                             disabled={activandoId === p.id}
-                            className="inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-100 disabled:opacity-60"
+                            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-60"
                           >
                             {activandoId === p.id ? (
                               <FaSpinner className="h-3.5 w-3.5 animate-spin" />
@@ -449,7 +448,7 @@ export default function ProductsPage() {
                   </tbody>
                 </table>
               ) : (
-                <div className="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/55">
                   No hay productos nuevos
                 </div>
               )}
@@ -459,26 +458,19 @@ export default function ProductsPage() {
       )}
 
       {modalInactivosAbierto && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 py-10">
-          <div className="relative w-full max-w-3xl rounded-2xl bg-white p-6 shadow-lg">
+        <div className={`${overlayClass} items-start py-10`}>
+          <div className={`${modalClass} w-full max-w-3xl`}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-xl text-center items-center
-                font-semibold text-gray-900">
-                  Productos inactivos
-                </h2>
+                <h2 className="text-xl font-semibold text-white">Productos inactivos</h2>
               </div>
-              <button
-                type="button"
-                onClick={cerrarModalInactivos}
-                className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-              >
+              <button type="button" onClick={cerrarModalInactivos} className={closeButtonClass}>
                 X
               </button>
             </div>
 
             {errorActivar && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
                 {errorActivar}
               </div>
             )}
@@ -486,34 +478,32 @@ export default function ProductsPage() {
             <div className="mt-4 max-h-[60vh] overflow-y-auto">
               {inactivos.length > 0 ? (
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-gray-600">
+                  <thead className="bg-white/5 text-left text-white/65">
                     <tr>
                       <th className="px-4 py-2 font-semibold">Producto</th>
-                      <th className="px-4 py-2 font-semibold">Categoría</th>
+                      <th className="px-4 py-2 font-semibold">Categoria</th>
                       <th className="px-4 py-2 font-semibold">Precio</th>
                       <th className="px-4 py-2 font-semibold">Stock</th>
                       <th className="px-4 py-2 font-semibold">Estado</th>
-                      <th className="px-4 py-2 font-semibold text-right">Acciones</th>
+                      <th className="px-4 py-2 text-right font-semibold">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-white/10 text-white/85">
                     {inactivos.map((p) => (
-                      <tr key={p.id} className="hover:bg-gray-50">
+                      <tr key={p.id} className="transition hover:bg-white/5">
                         <td className="px-4 py-2">{p.nombre}</td>
-                        <td className="px-4 py-2">{p.categoria ?? "Sin categoría"}</td>
+                        <td className="px-4 py-2">{p.categoria ?? "Sin categoria"}</td>
                         <td className="px-4 py-2">{MONEDA.format(p.precio)}</td>
                         <td className="px-4 py-2">{p.stock}</td>
-                        <td className="px-4 py-2 text-gray-600">{p.estados ?? "Sin estado"}</td>
+                        <td className="px-4 py-2 text-white/60">{p.estados ?? "Sin estado"}</td>
                         <td className="px-4 py-2 text-right">
                           <button
                             type="button"
                             onClick={() => activarProducto(p)}
                             disabled={activandoId === p.id}
-                            className="inline-flex items-center gap-2 rounded-full border border-green-200 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-60"
+                            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:opacity-60"
                           >
-                            {activandoId === p.id && (
-                              <FaSpinner className="h-3.5 w-3.5 animate-spin" />
-                            )}
+                            {activandoId === p.id && <FaSpinner className="h-3.5 w-3.5 animate-spin" />}
                             {activandoId === p.id ? "Activando..." : "Activar"}
                           </button>
                         </td>
@@ -522,7 +512,7 @@ export default function ProductsPage() {
                   </tbody>
                 </table>
               ) : (
-                <div className="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-500">
+                <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/55">
                   No hay ningun producto inactivo
                 </div>
               )}
@@ -531,28 +521,43 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* MODAL: Ver */}
       {modalVerAbierto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-xl shadow-lg p-6 min-w-[320px] max-w-xs relative">
-            <button onClick={cerrarModalVer} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700">✕</button>
+        <div className={`${overlayClass} items-center`}>
+          <div className={`${modalClass} min-w-[320px] max-w-xs`}>
+            <button onClick={cerrarModalVer} className="absolute right-4 top-4 text-white/45 transition hover:text-white">
+              X
+            </button>
             {productoVer ? (
               <>
-                <h2 className="text-lg font-bold mb-4">Producto: {productoVer.nombre}</h2>
-                <div className="space-y-2 text-sm">
-                  <div><span className="font-semibold">Categoría:</span> {productoVer.categoria ?? "—"}</div>
-                  <div><span className="font-semibold">Precio:</span> {MONEDA.format(productoVer.precio)}</div>
-                  <div><span className="font-semibold">Stock:</span> {productoVer.stock}</div>
+                <h2 className="mb-4 text-lg font-bold text-white">Producto: {productoVer.nombre}</h2>
+                <div className="space-y-2 text-sm text-white/75">
                   <div>
-                    <span className="font-semibold">Estado:</span>{" "}
+                    <span className="font-semibold text-white">Categoria:</span> {productoVer.categoria ?? "-"}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-white">Precio:</span> {MONEDA.format(productoVer.precio)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-white">Stock:</span> {productoVer.stock}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-white">Estado:</span>{" "}
                     {(productoVer.estados ?? "").toLowerCase() === "inactivo"
                       ? "Inactivo"
-                      : (productoVer.stock > 0 ? "Disponible" : "Agotado")}
+                      : productoVer.stock > 0
+                        ? "Disponible"
+                        : "Agotado"}
                   </div>
-                  <div><span className="font-semibold">Descripción:</span> {productoVer.descripcion ?? "—"}</div>
-                  {productoVer.id_proveedor != null && <div><span className="font-semibold">Proveedor ID:</span> {productoVer.id_proveedor}</div>}
+                  <div>
+                    <span className="font-semibold text-white">Descripcion:</span> {productoVer.descripcion ?? "-"}
+                  </div>
+                  {productoVer.id_proveedor != null && (
+                    <div>
+                      <span className="font-semibold text-white">Proveedor ID:</span> {productoVer.id_proveedor}
+                    </div>
+                  )}
                   {productoVer.imagen && (
-                    <div className="mt-2 relative w-full aspect-[4/3]">
+                    <div className="relative mt-2 aspect-[4/3] w-full">
                       <Image
                         src={productoVer.imagen}
                         alt={productoVer.nombre}
@@ -566,9 +571,9 @@ export default function ProductsPage() {
                 </div>
               </>
             ) : (
-              <div className="text-center p-8">
+              <div className="p-8 text-center">
                 <div className="flex items-center justify-center gap-2">
-                  <FaSpinner className="animate-spin text-xl text-gray-500" />
+                  <FaSpinner className="animate-spin text-xl text-white/65" />
                 </div>
               </div>
             )}
@@ -576,43 +581,48 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* MODAL: Inactivar (Descontinuar) */}
       {modalInactivarAbierto && productoInactivar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-xl shadow-lg p-6 min-w-[320px] max-w-sm relative">
-            <button onClick={cerrarInactivar} className="absolute top-2 right-2 text-gray-400 hover:text-gray-700">✕</button>
-            <h2 className="text-lg font-bold mb-2">Descontinuar producto</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Estás a punto de marcar como <span className="font-semibold">inactivo</span> el producto:
+        <div className={`${overlayClass} items-center`}>
+          <div className={`${modalClass} min-w-[320px] max-w-sm`}>
+            <button onClick={cerrarInactivar} className="absolute right-4 top-4 text-white/45 transition hover:text-white">
+              X
+            </button>
+            <h2 className="mb-2 text-lg font-bold text-white">Descontinuar producto</h2>
+            <p className="mb-4 text-sm text-white/70">
+              Estas a punto de marcar como <span className="font-semibold">inactivo</span> el producto:
             </p>
-            <div className="rounded-lg border border-gray-200 p-3 text-sm mb-3">
-              <div><span className="font-semibold">Nombre:</span> {productoInactivar.nombre}</div>
-              <div><span className="font-semibold">Stock:</span> {productoInactivar.stock}</div>
+            <div className="mb-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-white/75">
+              <div>
+                <span className="font-semibold text-white">Nombre:</span> {productoInactivar.nombre}
+              </div>
+              <div>
+                <span className="font-semibold text-white">Stock:</span> {productoInactivar.stock}
+              </div>
               {(productoInactivar.estados ?? "").toLowerCase() === "inactivo" && (
-                <div className="mt-1 text-xs text-orange-600">Este producto ya está inactivo.</div>
+                <div className="mt-1 text-xs text-amber-200">Este producto ya esta inactivo.</div>
               )}
             </div>
 
             {productoInactivar.stock > 0 && (
-              <div className="mb-3 rounded-md bg-red-50 text-red-700 border border-red-200 px-3 py-2 text-sm">
-                <span className="font-medium">Advertencia:</span> estás descontinuando un producto que aún tiene stock.
-                No se eliminará, pero dejará de estar disponible para ventas.
+              <div className="mb-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+                <span className="font-medium">Advertencia:</span> estas descontinuando un producto que aun tiene stock.
+                No se eliminara, pero dejara de estar disponible para ventas.
               </div>
             )}
 
-            {errorInactivar && <div className="mb-2 text-sm text-red-600">{errorInactivar}</div>}
+            {errorInactivar && <div className="mb-2 text-sm text-rose-200">{errorInactivar}</div>}
 
             <div className="flex gap-2">
               <button
                 onClick={confirmarInactivar}
                 disabled={guardandoInactivar || (productoInactivar.estados ?? "").toLowerCase() === "inactivo"}
-                className="flex-1 rounded bg-gray-900 text-white py-2 font-semibold hover:bg-black disabled:opacity-60"
+                className="flex-1 rounded-2xl bg-white px-4 py-2 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:opacity-60"
               >
-                {guardandoInactivar ? "Guardando…" : "Sí, descontinuar"}
+                {guardandoInactivar ? "Guardando..." : "Si, descontinuar"}
               </button>
               <button
                 onClick={cerrarInactivar}
-                className="flex-1 rounded border border-gray-300 py-2 font-semibold hover:bg-gray-50"
+                className="flex-1 rounded-2xl border border-white/10 py-2 font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
               >
                 Cancelar
               </button>
@@ -621,74 +631,78 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex items-center justify-between">
-          <h1 className="text-2xl sm:text-3xl font-bold text-center tracking-tight">Gestión de productos</h1>
+      <div className="mx-auto max-w-6xl space-y-8">
+        <header className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-200">Inventario</p>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Gestion de productos</h1>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-white/75 sm:text-base">
+            Supervisa disponibilidad, revisa el catalogo y gestiona pedidos de reposicion sin alterar el flujo operativo.
+          </p>
         </header>
 
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={abrirModalNoDisponibles}
-            className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_12px_30px_rgba(56,189,248,0.25)] transition hover:bg-sky-300"
           >
             + Añadir nuevo producto{noDisponibles.length ? ` (${noDisponibles.length})` : ""}
           </button>
           <button
             type="button"
             onClick={abrirModalInactivos}
-            className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-100"
+            className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(0,0,0,0.2)] transition hover:border-sky-300/40 hover:bg-white/15"
           >
-            Ver productos Inactivos 
+            Ver productos inactivos
           </button>
         </div>
 
-        {/* Filtros */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className={`${panelClass} flex flex-col gap-3 p-4 sm:flex-row sm:items-center`}>
           <div className="relative flex-1">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/45">
               <Search />
             </span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, categoría, precio, stock…"
-              className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-4 py-2.5 text-sm shadow-sm outline-none ring-0 focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
+              placeholder="Buscar por nombre, categoria, precio, stock..."
+              className="w-full rounded-2xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white shadow-sm outline-none ring-0 placeholder:text-white/35 focus:border-sky-300/40 focus:bg-white/10 focus:ring-2 focus:ring-sky-300/20"
             />
           </div>
 
           <select
             value={filtroCategoria}
             onChange={(e) => setFiltroCategoria(e.target.value)}
-            className="rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-2.5 text-sm text-white shadow-sm outline-none [color-scheme:dark] focus:ring-2 focus:ring-sky-300/20"
           >
             {categorias.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c} className="bg-slate-900 text-white">
+                {c}
+              </option>
             ))}
           </select>
         </div>
 
-        {/* Tabla */}
-        <div className="overflow-hidden rounded-2xl bg-white shadow">
+        <div className={panelClass}>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-600">
+              <thead className="bg-white/5 text-left text-white/65">
                 <tr>
                   <th className="px-6 py-3 font-semibold">Producto</th>
-                  <th className="px-6 py-3 font-semibold">Categoría</th>
+                  <th className="px-6 py-3 font-semibold">Categoria</th>
                   <th className="px-6 py-3 font-semibold">Precio</th>
                   <th className="px-6 py-3 font-semibold">Stock</th>
                   <th className="px-6 py-3 font-semibold">Estado</th>
-                  <th className="px-6 py-3 font-semibold text-center">Acciones</th>
+                  <th className="px-6 py-3 text-center font-semibold">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-white/10 text-white/85">
                 {cargando && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-10 text-center text-white/60">
                       <div className="flex items-center justify-center gap-2">
-                        <FaSpinner className="animate-spin text-xl text-gray-500" />
-                        <span>Cargando…</span>
+                        <FaSpinner className="animate-spin text-xl text-white/60" />
+                        <span>Cargando...</span>
                       </div>
                     </td>
                   </tr>
@@ -696,89 +710,90 @@ export default function ProductsPage() {
 
                 {!cargando && error && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-red-600">{error}</td>
+                    <td colSpan={6} className="px-6 py-10 text-center text-rose-200">
+                      {error}
+                    </td>
                   </tr>
                 )}
 
-                {!cargando && !error && filtrados.map((p) => {
-                  const estado = (p.estados ?? "").toLowerCase();
-                  const esDisponible = estado === "disponible";
-                  const esInactivo = estado === "inactivo";
-                  const esNoDisponible = estado === "no disponible";
-                  const esAgotado = (p.stock ?? 0) <= 0;
-                  const estadoTexto = esAgotado ? "Agotado" : (p.estados ?? "Sin estado");
-                  const estadoClass = esInactivo
-                    ? "bg-gray-100 text-gray-600 ring-gray-200"
-                    : esNoDisponible
-                      ? "bg-yellow-50 text-yellow-700 ring-yellow-200"
-                      : esAgotado
-                        ? "bg-orange-50 text-orange-700 ring-orange-200"
-                        : "bg-green-50 text-green-700 ring-green-200";
-                  return (
-                    <tr key={p.id} className="hover:bg-gray-50/60">
-                      <td className="px-6 py-3">{p.nombre}</td>
-                      <td className="px-6 py-3">{p.categoria ?? "Sin categoría"}</td>
-                      <td className="px-6 py-3">{MONEDA.format(p.precio)}</td>
-                      <td className="px-6 py-3">{p.stock}</td>
-                      <td className="px-6 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${estadoClass}`}>
-                          {estadoTexto}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          {/* Ver */}
-                          <button
-                            title="Ver más información"
-                            onClick={() => verProducto(p)}
-                            className="rounded-lg border border-gray-200 p-2 text-gray-700 hover:bg-gray-100"
-                          >
-                            <Eye />
-                          </button>
+                {!cargando &&
+                  !error &&
+                  filtrados.map((p) => {
+                    const estado = (p.estados ?? "").toLowerCase();
+                    const esDisponible = estado === "disponible";
+                    const esInactivo = estado === "inactivo";
+                    const esNoDisponible = estado === "no disponible";
+                    const esAgotado = (p.stock ?? 0) <= 0;
+                    const estadoTexto = esAgotado ? "Agotado" : (p.estados ?? "Sin estado");
+                    const estadoClass = esInactivo
+                      ? "bg-white/10 text-white/55 ring-white/10"
+                      : esNoDisponible
+                        ? "bg-amber-500/10 text-amber-100 ring-amber-400/20"
+                        : esAgotado
+                          ? "bg-orange-500/10 text-orange-100 ring-orange-400/20"
+                          : "bg-emerald-500/10 text-emerald-100 ring-emerald-400/20";
 
-                          <button
-                            title={
-                              !esDisponible
-                                ? "Producto no disponible"
-                                : esAgotado
-                                  ? "Producto agotado. Solicitar pedido"
-                                  : p.pedidos
-                                    ? "Pedido ya solicitado"
-                                    : "Solicitar pedido"
-                            }
-                            type="button"
-                            onClick={() => abrirModalPedido(p)}
-                            disabled={!esDisponible || p.pedidos}
-                            className="rounded-lg border border-gray-200 p-2 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                    return (
+                      <tr key={p.id} className="transition hover:bg-white/5">
+                        <td className="px-6 py-3">{p.nombre}</td>
+                        <td className="px-6 py-3">{p.categoria ?? "Sin categoria"}</td>
+                        <td className="px-6 py-3">{MONEDA.format(p.precio)}</td>
+                        <td className="px-6 py-3">{p.stock}</td>
+                        <td className="px-6 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${estadoClass}`}
                           >
-                            <FaClipboardCheck className="h-4 w-4" />
-                          </button>
+                            {estadoTexto}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <button title="Ver mas informacion" onClick={() => verProducto(p)} className={actionButtonClass}>
+                              <Eye />
+                            </button>
 
-                          {/* Descontinuar (inactivar) */}
-                          <button
-                            title={
-                              !esDisponible
-                                ? "No disponible para descontinuar"
-                                : esAgotado
-                                  ? "Producto agotado. Descontinuar"
-                                  : "Descontinuar (inactivar)"
-                            }
-                            onClick={() => abrirInactivar(p)}
-                            disabled={!esDisponible}
-                            className="rounded-lg border border-gray-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                          >
-                            <FaBan className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            <button
+                              title={
+                                !esDisponible
+                                  ? "Producto no disponible"
+                                  : esAgotado
+                                    ? "Producto agotado. Solicitar pedido"
+                                    : p.pedidos
+                                      ? "Pedido ya solicitado"
+                                      : "Solicitar pedido"
+                              }
+                              type="button"
+                              onClick={() => abrirModalPedido(p)}
+                              disabled={!esDisponible || p.pedidos}
+                              className={actionButtonClass}
+                            >
+                              <FaClipboardCheck className="h-4 w-4" />
+                            </button>
+
+                            <button
+                              title={
+                                !esDisponible
+                                  ? "No disponible para descontinuar"
+                                  : esAgotado
+                                    ? "Producto agotado. Descontinuar"
+                                    : "Descontinuar (inactivar)"
+                              }
+                              onClick={() => abrirInactivar(p)}
+                              disabled={!esDisponible}
+                              className="rounded-xl border border-rose-400/20 bg-rose-500/10 p-2 text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-50"
+                            >
+                              <FaBan className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
                 {!cargando && !error && filtrados.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
-                      No hay productos para “{query}”.
+                    <td colSpan={6} className="px-6 py-10 text-center text-white/55">
+                      No hay productos para &quot;{query}&quot;.
                     </td>
                   </tr>
                 )}
@@ -788,7 +803,7 @@ export default function ProductsPage() {
         </div>
 
         {!cargando && !error && (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-white/60">
             Mostrando <span className="font-medium">{filtrados.length}</span> de{" "}
             <span className="font-medium">{totalDisponibles}</span> productos disponibles
           </p>
