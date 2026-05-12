@@ -3,6 +3,7 @@
 import * as React from "react";
 import { FaSpinner } from "react-icons/fa";
 import AsignarDomicilio from "./asignarDomicilio";
+import EntregaModal from "./entrega";
 import HorarioDomiciliario from "./horarioDomiciliario";
 
 type Domiciliario = {
@@ -28,6 +29,32 @@ type Pedido = {
   tipoEntrega: string | null;
   estadoPedido: string | null;
   total: number;
+};
+
+type Pago = {
+  idPago: number;
+  idPedido: number;
+  metodoPago: string;
+  estadoPago: string;
+  monto: number;
+  fechaPago: string | null;
+  referenciaPago: string | null;
+  observacion: string | null;
+};
+
+type DetallePedido = {
+  idDetallePedido: number;
+  idPedido: number;
+  idProducto: number;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number | null;
+};
+
+type Producto = {
+  id: number;
+  nombre: string;
+  categoria: string | null;
 };
 
 type Entrega = {
@@ -67,6 +94,13 @@ type RetiroView = Pedido & {
 type DomicilioView = Pedido & {
   entrega: Entrega | null;
   domiciliarioNombre: string | null;
+  domiciliario: DomiciliarioView | null;
+  vendedorNombre: string;
+  pagos: Pago[];
+  detalles: Array<{
+    detalle: DetallePedido;
+    producto: Producto | null;
+  }>;
 };
 
 const ESTADOS_LABORALES = ["Activo", "Inactivo", "Suspendido"];
@@ -93,6 +127,9 @@ export default function GestionDomiciliarioPage() {
   const [usuarios, setUsuarios] = React.useState<Usuario[]>([]);
   const [pedidos, setPedidos] = React.useState<Pedido[]>([]);
   const [entregas, setEntregas] = React.useState<Entrega[]>([]);
+  const [pagos, setPagos] = React.useState<Pago[]>([]);
+  const [detallesPedido, setDetallesPedido] = React.useState<DetallePedido[]>([]);
+  const [productos, setProductos] = React.useState<Producto[]>([]);
   const [vendedores, setVendedores] = React.useState<Vendedor[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -110,21 +147,45 @@ export default function GestionDomiciliarioPage() {
         setLoading(true);
         setError(null);
 
-        const [domiciliariosRes, usuariosRes, pedidosRes, entregasRes, vendedoresRes] =
+        const [
+          domiciliariosRes,
+          usuariosRes,
+          pedidosRes,
+          entregasRes,
+          pagosRes,
+          detallesPedidoRes,
+          productosRes,
+          vendedoresRes,
+        ] =
           await Promise.all([
             fetch("/api/domiciliario", { cache: "no-store" }),
             fetch("/api/usuarios", { cache: "no-store" }),
             fetch("/api/pedidos", { cache: "no-store" }),
             fetch("/api/entrega", { cache: "no-store" }),
+            fetch("/api/pago", { cache: "no-store" }),
+            fetch("/api/detalle_pedido", { cache: "no-store" }),
+            fetch("/api/productos", { cache: "no-store" }),
             fetch("/api/vendedores", { cache: "no-store" }),
           ]);
 
-        const [domiciliariosJson, usuariosJson, pedidosJson, entregasJson, vendedoresJson] =
+        const [
+          domiciliariosJson,
+          usuariosJson,
+          pedidosJson,
+          entregasJson,
+          pagosJson,
+          detallesPedidoJson,
+          productosJson,
+          vendedoresJson,
+        ] =
           await Promise.all([
             domiciliariosRes.json(),
             usuariosRes.json(),
             pedidosRes.json(),
             entregasRes.json(),
+            pagosRes.json(),
+            detallesPedidoRes.json(),
+            productosRes.json(),
             vendedoresRes.json(),
           ]);
 
@@ -140,6 +201,15 @@ export default function GestionDomiciliarioPage() {
         if (!entregasRes.ok || !entregasJson?.ok) {
           throw new Error(entregasJson?.error ?? `HTTP ${entregasRes.status}`);
         }
+        if (!pagosRes.ok || !pagosJson?.ok) {
+          throw new Error(pagosJson?.error ?? `HTTP ${pagosRes.status}`);
+        }
+        if (!detallesPedidoRes.ok || !detallesPedidoJson?.ok) {
+          throw new Error(detallesPedidoJson?.error ?? `HTTP ${detallesPedidoRes.status}`);
+        }
+        if (!productosRes.ok || !productosJson?.ok) {
+          throw new Error(productosJson?.error ?? `HTTP ${productosRes.status}`);
+        }
         if (!vendedoresRes.ok || !vendedoresJson?.ok) {
           throw new Error(vendedoresJson?.error ?? `HTTP ${vendedoresRes.status}`);
         }
@@ -149,6 +219,9 @@ export default function GestionDomiciliarioPage() {
           setUsuarios(usuariosJson.data as Usuario[]);
           setPedidos(pedidosJson.data as Pedido[]);
           setEntregas(entregasJson.data as Entrega[]);
+          setPagos(pagosJson.data as Pago[]);
+          setDetallesPedido(detallesPedidoJson.data as DetallePedido[]);
+          setProductos(productosJson.data as Producto[]);
           setVendedores(vendedoresJson.data as Vendedor[]);
         }
       } catch (fetchError: unknown) {
@@ -210,8 +283,29 @@ export default function GestionDomiciliarioPage() {
   );
 
   const domicilios = React.useMemo<DomicilioView[]>(
-    () =>
-      pedidos
+    () => {
+      const pagosPorPedido = new Map<number, Pago[]>();
+      pagos.forEach((pago) => {
+        const current = pagosPorPedido.get(pago.idPedido) ?? [];
+        current.push(pago);
+        pagosPorPedido.set(
+          pago.idPedido,
+          current.sort((left, right) => right.idPago - left.idPago)
+        );
+      });
+
+      const productosMap = new Map<number, Producto>(
+        productos.map((producto) => [producto.id, producto])
+      );
+
+      const detallesPorPedido = new Map<number, DetallePedido[]>();
+      detallesPedido.forEach((detalle) => {
+        const current = detallesPorPedido.get(detalle.idPedido) ?? [];
+        current.push(detalle);
+        detallesPorPedido.set(detalle.idPedido, current);
+      });
+
+      return pedidos
         .filter((pedido) => normalizeText(pedido.tipoEntrega) === "domicilio")
         .map((pedido) => {
           const entrega = entregas.find((item) => item.idPedido === pedido.idPedido) ?? null;
@@ -219,14 +313,26 @@ export default function GestionDomiciliarioPage() {
             entrega?.idDomiciliario !== null && entrega?.idDomiciliario !== undefined
               ? domiciliariosView.find((item) => item.idDomiciliario === entrega.idDomiciliario)
               : null;
+          const vendedor = pedido.idVendedor ? vendedoresMap.get(pedido.idVendedor) : null;
 
           return {
             ...pedido,
             entrega,
             domiciliarioNombre: domiciliario?.nombreCompleto ?? null,
+            domiciliario: domiciliario ?? null,
+            vendedorNombre:
+              vendedor
+                ? [vendedor.nombre, vendedor.apellido].filter(Boolean).join(" ")
+                : "Compra directa del usuario",
+            pagos: pagosPorPedido.get(pedido.idPedido) ?? [],
+            detalles: (detallesPorPedido.get(pedido.idPedido) ?? []).map((detalle) => ({
+              detalle,
+              producto: productosMap.get(detalle.idProducto) ?? null,
+            })),
           };
-        }),
-    [pedidos, entregas, domiciliariosView]
+        });
+    },
+    [pedidos, entregas, domiciliariosView, pagos, detallesPedido, productos, vendedoresMap]
   );
 
   const activeDomiciliarios = React.useMemo(
@@ -272,6 +378,9 @@ export default function GestionDomiciliarioPage() {
     setError(null);
 
     try {
+      const domiciliarioAsignado =
+        domiciliariosView.find((item) => item.idDomiciliario === idDomiciliario) ?? null;
+
       if (pedido.entrega) {
         const res = await fetch(`/api/entrega/${pedido.entrega.idEntrega}`, {
           method: "PUT",
@@ -289,6 +398,16 @@ export default function GestionDomiciliarioPage() {
 
         setEntregas((prev) =>
           prev.map((item) => (item.idEntrega === json.data.idEntrega ? (json.data as Entrega) : item))
+        );
+        setDetailPedido((prev) =>
+          prev && prev.idPedido === pedido.idPedido
+            ? {
+                ...prev,
+                entrega: json.data as Entrega,
+                domiciliarioNombre: domiciliarioAsignado?.nombreCompleto ?? null,
+                domiciliario: domiciliarioAsignado,
+              }
+            : prev
         );
       } else {
         const res = await fetch("/api/entrega", {
@@ -308,6 +427,16 @@ export default function GestionDomiciliarioPage() {
         }
 
         setEntregas((prev) => [json.data as Entrega, ...prev]);
+        setDetailPedido((prev) =>
+          prev && prev.idPedido === pedido.idPedido
+            ? {
+                ...prev,
+                entrega: json.data as Entrega,
+                domiciliarioNombre: domiciliarioAsignado?.nombreCompleto ?? null,
+                domiciliario: domiciliarioAsignado,
+              }
+            : prev
+        );
       }
     } catch (assignError: unknown) {
       setError(assignError instanceof Error ? assignError.message : "Error al asignar la entrega");
@@ -456,12 +585,7 @@ export default function GestionDomiciliarioPage() {
               {activeModal === "domicilios" && (
                 <AsignarDomicilio
                   domicilios={domicilios}
-                  activeDomiciliarios={activeDomiciliarios}
-                  assigningPedidoId={assigningPedidoId}
                   formatDate={formatDate}
-                  onAssignEntrega={(pedido, idDomiciliario) => {
-                    void assignEntrega(pedido, idDomiciliario);
-                  }}
                   onViewDetail={setDetailPedido}
                 />
               )}
@@ -471,66 +595,16 @@ export default function GestionDomiciliarioPage() {
       )}
 
       {detailPedido && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-lg rounded-[2rem] border border-white/10 bg-slate-950/95 text-white shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-            <button
-              type="button"
-              onClick={() => setDetailPedido(null)}
-              className="absolute right-5 top-5 text-white/45 transition hover:text-white"
-            >
-              X
-            </button>
-
-            <div className="border-b border-white/10 px-6 py-6 sm:px-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-200">Detalle de entrega</p>
-              <h2 className="mt-3 text-center text-2xl font-bold tracking-tight">
-                Pedido #{detailPedido.idPedido}
-              </h2>
-            </div>
-
-            <div className="space-y-4 px-6 py-6 text-sm text-white/75 sm:px-8">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Estado pedido</span>
-                  {detailPedido.estadoPedido ?? "-"}
-                </div>
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Estado entrega</span>
-                  {detailPedido.entrega?.estadoEntrega ?? "pendiente"}
-                </div>
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Direccion</span>
-                  {detailPedido.entrega?.direccionEntrega ?? "-"}
-                </div>
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Ciudad</span>
-                  {detailPedido.entrega?.ciudad ?? "-"}
-                </div>
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Contacto</span>
-                  {detailPedido.entrega?.telefonoContacto ?? "-"}
-                </div>
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Recibe</span>
-                  {detailPedido.entrega?.nombreRecibe ?? "-"}
-                </div>
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Fecha programada</span>
-                  {formatDate(detailPedido.entrega?.fechaProgramada ?? null)}
-                </div>
-                <div>
-                  <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Costo envio</span>
-                  ${Number(detailPedido.entrega?.costoEnvio ?? 0).toLocaleString("es-CO")}
-                </div>
-              </div>
-
-              <div>
-                <span className="block text-xs uppercase tracking-[0.18em] text-sky-200/80">Observacion</span>
-                {detailPedido.entrega?.observacion ?? "-"}
-              </div>
-            </div>
-          </div>
-        </div>
+        <EntregaModal
+          pedido={detailPedido}
+          activeDomiciliarios={activeDomiciliarios}
+          assigningPedidoId={assigningPedidoId}
+          formatDate={formatDate}
+          onAssignEntrega={(idDomiciliario) => {
+            void assignEntrega(detailPedido, idDomiciliario);
+          }}
+          onClose={() => setDetailPedido(null)}
+        />
       )}
 
       {horarioDomiciliario && (
