@@ -11,7 +11,7 @@ Sistema completo para que los domiciliarios registren el historial de entregas c
 ## Archivos Creados
 
 ### 1. **API Routes**
-- `app/api/entregas-historial/route.ts` - API para obtener historial y registrar entregas
+- `app/api/historial_entrega/route.ts` - API para obtener historial y registrar entregas
 
 ### 2. **Componentes React**
 - `app/user/domiciliario/HistorialEntregas/HistorialEntregasClient.tsx` - Cliente principal
@@ -83,7 +83,7 @@ ORDER BY ordinal_position;
 
 ## API Endpoints
 
-### GET `/api/entregas-historial`
+### GET `/api/historial_entrega`
 Obtiene el historial de entregas del domiciliario autenticado
 
 **Parámetros Query:**
@@ -119,7 +119,7 @@ Obtiene el historial de entregas del domiciliario autenticado
 }
 ```
 
-### POST `/api/entregas-historial`
+### POST `/api/historial_entrega`
 Registra una entrega con foto de evidencia
 
 **Body:**

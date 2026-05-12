@@ -64,7 +64,7 @@ export default function RegistrarEntregaModal({
     if (!pedido) return;
 
     try {
-      const response = await fetch("/api/entregas-historial", {
+      const response = await fetch("/api/historial_entrega", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

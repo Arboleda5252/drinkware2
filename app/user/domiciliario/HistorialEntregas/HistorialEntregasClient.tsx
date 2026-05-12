@@ -4,25 +4,39 @@ import { useEffect, useState } from "react";
 import EntregaCard from "./EntregaCard";
 import CameraCapture from "./CameraCapture";
 
-interface Entrega {
+interface HistorialEntrega {
+  idHistorial: number;
   idEntrega: number;
-  idPedido: number;
-  idDomiciliario: number | null;
-  nombreRecibe: string | null;
-  direccionEntrega: string | null;
-  ciudad: string | null;
-  estadoEntrega: string | null;
-  fechaSalida: string | null;
-  fechaEntrega: string | null;
+  estadoAnterior: string | null;
+  estadoNuevo: string;
+  fechaCambio: string;
+  idUsuario: number;
+  comentario: string | null;
   fotoEvidencia: string | null;
-  costoEnvio: string;
-  observacion: string | null;
+  entrega: {
+    idEntrega: number;
+    idPedido: number;
+    idDomiciliario: number | null;
+    nombreRecibe: string | null;
+    direccionEntrega: string | null;
+    ciudad: string | null;
+    estadoEntrega: string | null;
+    fechaSalida: string | null;
+    fechaEntrega: string | null;
+    costoEnvio: string;
+    observacion: string | null;
+  } | null;
+  usuario: {
+    idUsuario: number;
+    nombre: string;
+    email: string;
+  } | null;
 }
 
 type EstadoFiltro = "todos" | "entregado" | "pendiente" | "en camino" | "no entregado";
 
 export default function HistorialEntregasClient() {
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
+  const [historialEntregas, setHistorialEntregas] = useState<HistorialEntrega[]>([]);
   const [loading, setLoading] = useState(true);
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoFiltro>("todos");
   const [registrandoEntrega, setRegistrandoEntrega] = useState<number | null>(null);
@@ -40,11 +54,11 @@ export default function HistorialEntregasClient() {
         ...(estado && { estado }),
       });
 
-      const response = await fetch(`/api/entregas-historial?${query}`);
+      const response = await fetch(`/api/historial_entrega?${query}`);
       const data = await response.json();
 
       if (data.ok) {
-        setEntregas(data.data);
+        setHistorialEntregas(data.data);
         setTotalPages(data.pagination.pages);
       }
     } catch (error) {
@@ -72,7 +86,7 @@ export default function HistorialEntregasClient() {
     if (!registrandoEntrega) return;
 
     try {
-      const response = await fetch("/api/entregas-historial", {
+      const response = await fetch("/api/historial_entrega", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -137,38 +151,40 @@ export default function HistorialEntregasClient() {
             <p className="text-slate-600">Cargando entregas...</p>
           </div>
         </div>
-      ) : entregas.length === 0 ? (
+      ) : historialEntregas.length === 0 ? (
         <div className="rounded-lg bg-white/90 p-12 text-center">
           <p className="text-lg text-slate-600">No hay entregas en esta categoría</p>
           <p className="mt-2 text-sm text-slate-500">Las entregas registradas aparecerán aquí</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {entregas.map((entrega) => (
-            <div key={entrega.idEntrega} className="relative">
-              <EntregaCard
-                idEntrega={entrega.idEntrega}
-                idPedido={entrega.idPedido}
-                nombreRecibe={entrega.nombreRecibe}
-                direccionEntrega={entrega.direccionEntrega}
-                ciudad={entrega.ciudad}
-                estadoEntrega={entrega.estadoEntrega}
-                fechaSalida={entrega.fechaSalida}
-                fechaEntrega={entrega.fechaEntrega}
-                fotoEvidencia={entrega.fotoEvidencia}
-                costoEnvio={entrega.costoEnvio}
-                observacion={entrega.observacion}
-                onVerDetalles={(idPedido) => {
-                  // Aquí puedes navegar a los detalles del pedido si lo deseas
-                  window.location.href = `/user/domiciliario/pedidos/${idPedido}`;
-                }}
-              />
+          {historialEntregas.map((historial) => (
+            <div key={historial.idHistorial} className="relative">
+              {historial.entrega && (
+                <EntregaCard
+                  idEntrega={historial.entrega.idEntrega}
+                  idPedido={historial.entrega.idPedido}
+                  nombreRecibe={historial.entrega.nombreRecibe}
+                  direccionEntrega={historial.entrega.direccionEntrega}
+                  ciudad={historial.entrega.ciudad}
+                  estadoEntrega={historial.entrega.estadoEntrega}
+                  fechaSalida={historial.entrega.fechaSalida}
+                  fechaEntrega={historial.entrega.fechaEntrega}
+                  fotoEvidencia={historial.fotoEvidencia || historial.entrega.fotoEvidencia}
+                  costoEnvio={historial.entrega.costoEnvio}
+                  observacion={historial.entrega.observacion}
+                  onVerDetalles={(idPedido) => {
+                    // Aquí puedes navegar a los detalles del pedido si lo deseas
+                    window.location.href = `/user/domiciliario/pedidos/${idPedido}`;
+                  }}
+                />
+              )}
 
               {/* Botón registrar entrega si aún no está entregado */}
-              {entrega.estadoEntrega !== "entregado" && !entrega.fotoEvidencia && (
+              {historial.entrega && historial.entrega.estadoEntrega !== "entregado" && !historial.fotoEvidencia && (
                 <div className="absolute right-6 top-6">
                   <button
-                    onClick={() => handleRegistrarEntrega(entrega.idEntrega)}
+                    onClick={() => handleRegistrarEntrega(historial.entrega!.idEntrega)}
                     className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600"
                   >
                     Registrar Entrega

@@ -7,7 +7,7 @@ Un sistema completo para que los domiciliarios registren entregas con evidencia 
 ### 📁 Archivos Nuevos Creados (7 archivos)
 
 #### 1. **API Routes**
-- `app/api/entregas-historial/route.ts` - API completa
+- `app/api/historial_entrega/route.ts` - API completa
   - GET: Obtener historial del domiciliario
   - POST: Registrar entrega con foto
 
@@ -173,14 +173,14 @@ observacion ............... Notas adicionales ✓
 ## 🔄 Flujo de Operaciones
 
 ```
-OBTENER HISTORIAL (GET /api/entregas-historial)
+OBTENER HISTORIAL (GET /api/historial_entrega)
 ├─ Usuario autenticado?
 ├─ Obtener entregas del domiciliario
 ├─ Filtrar por estado (opcional)
 ├─ Paginar resultados
 └─ Retornar con foto_evidencia en Base64
 
-REGISTRAR ENTREGA (POST /api/entregas-historial)
+REGISTRAR ENTREGA (POST /api/historial_entrega)
 ├─ Usuario autenticado?
 ├─ Entrega existe?
 ├─ Entrega pertenece al domiciliario?
@@ -295,7 +295,7 @@ Domiciliario Juan:
 
 Ver también:
 - `HISTORIAL_ENTREGAS_SETUP.md` - Guía técnica detallada
-- `app/api/entregas-historial/route.ts` - Código API
+- `app/api/historial_entrega/route.ts` - Código API
 - `app/user/domiciliario/HistorialEntregas/` - Componentes React
 
 ---

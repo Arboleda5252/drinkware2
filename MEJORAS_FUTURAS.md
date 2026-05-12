@@ -55,7 +55,7 @@ npm install react-signature-canvas
 Cuando la entrega se registra:
 
 ```typescript
-// app/api/entregas-historial/route.ts POST
+// app/api/historial_entrega/route.ts POST
 // Después de guardar, enviar:
 await sendEmailToCustomer({
   email: customer.email,
@@ -77,7 +77,7 @@ npm install sharp
 ```
 
 ```typescript
-// app/api/entregas-historial/route.ts
+// app/api/historial_entrega/route.ts
 import sharp from 'sharp';
 
 export async function POST(req) {
