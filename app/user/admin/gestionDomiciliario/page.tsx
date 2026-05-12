@@ -388,7 +388,7 @@ export default function GestionDomiciliarioPage() {
           body: JSON.stringify({
             idDomiciliario,
             fechaAsignacion: new Date().toISOString(),
-            estadoEntrega: "asignada",
+            estadoEntrega: "Asignada",
           }),
         });
         const json = await res.json();
@@ -417,7 +417,7 @@ export default function GestionDomiciliarioPage() {
             idPedido: pedido.idPedido,
             idDomiciliario,
             costoEnvio: 0,
-            estadoEntrega: "asignada",
+            estadoEntrega: "Asignada",
             fechaAsignacion: new Date().toISOString(),
           }),
         });

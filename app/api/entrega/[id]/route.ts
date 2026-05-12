@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/app/Datalibs/database";
+import { DatabaseError } from "pg";
 
 export const runtime = "nodejs";
 
@@ -62,6 +63,15 @@ const toDto = (row: EntregaRow) => ({
   observacion: row.observacion,
 });
 
+const connectionErrorCodes = new Set(["ECONNREFUSED", "ENOTFOUND", "ECONNRESET", "ETIMEDOUT"]);
+
+function normalizeEstadoEntrega(value: string | null) {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 async function getTipoEntregaPedidoByEntregaId(idEntrega: number) {
   const { rows } = await sql<{ tipoEntrega: string | null }>(
     `
@@ -114,6 +124,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json().catch(() => ({}));
     const updates: string[] = [];
     const values: Array<number | string | null> = [];
+    let nextIdDomiciliario: number | null | undefined = undefined;
 
     const addUpdate = (column: string, value: number | string | null) => {
       values.push(value);
@@ -138,10 +149,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
       return { ok: true as const, value };
     };
 
-    if (body?.idDomiciliario !== undefined || body?.id_domiciliario !== undefined) {
+    if (
+      body?.idDomiciliario !== undefined ||
+      body?.id_domiciliario !== undefined ||
+      body?.domiciliarioId !== undefined ||
+      body?.domiciliario_id !== undefined
+    ) {
       const domiciliarioInput =
         body?.idDomiciliario ?? body?.id_domiciliario ?? body?.domiciliarioId ?? body?.domiciliario_id;
       if (domiciliarioInput === null || domiciliarioInput === "") {
+        nextIdDomiciliario = null;
         addUpdate("id_domiciliario", null);
       } else {
         const parsed = Number(domiciliarioInput);
@@ -151,6 +168,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
             { status: 400 }
           );
         }
+        nextIdDomiciliario = parsed;
         addUpdate("id_domiciliario", parsed);
       }
     }
@@ -182,8 +200,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
       addUpdate("costo_envio", costoEnvio);
     }
 
+    const estadoEntregaInput = normalizeEstadoEntrega(
+      textOrNull(body?.estadoEntrega ?? body?.estado_entrega)
+    );
     if (body?.estadoEntrega !== undefined || body?.estado_entrega !== undefined) {
-      addUpdate("estado_entrega", textOrNull(body?.estadoEntrega ?? body?.estado_entrega));
+      addUpdate("estado_entrega", estadoEntregaInput);
+    } else if (nextIdDomiciliario !== undefined && nextIdDomiciliario !== null) {
+      addUpdate("estado_entrega", "Asignada");
     }
 
     const fechaProgramadaResult = parseDateOrNull(
@@ -198,7 +221,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       "fecha_asignacion"
     );
     if (!fechaAsignacionResult.ok) return fechaAsignacionResult.response;
-    if (fechaAsignacionResult.value !== undefined) addUpdate("fecha_asignacion", fechaAsignacionResult.value);
+    if (fechaAsignacionResult.value !== undefined) {
+      addUpdate("fecha_asignacion", fechaAsignacionResult.value);
+    } else if (nextIdDomiciliario !== undefined) {
+      addUpdate("fecha_asignacion", nextIdDomiciliario === null ? null : new Date().toISOString());
+    }
 
     const fechaSalidaResult = parseDateOrNull(
       body?.fechaSalida ?? body?.fecha_salida,
@@ -273,6 +300,26 @@ export async function PUT(req: NextRequest, { params }: Params) {
     return NextResponse.json({ ok: true, data: toDto(rows[0]) });
   } catch (error) {
     console.error("[PUT /api/entrega/:id]", error);
+    if (error instanceof DatabaseError) {
+      if (error.code === "23503") {
+        return NextResponse.json(
+          { ok: false, error: "El domiciliario asociado no existe en la base de datos" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const code =
+      typeof error === "object" && error && "code" in error
+        ? (error as { code?: unknown }).code
+        : null;
+    if (typeof code === "string" && connectionErrorCodes.has(code)) {
+      return NextResponse.json(
+        { ok: false, error: "No se pudo conectar a la base de datos. Revisa app/libs/database.ts" },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
       { ok: false, error: "Error al actualizar la entrega" },
       { status: 500 }

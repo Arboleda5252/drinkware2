@@ -188,6 +188,9 @@ export default function EntregaModal({
                       <p className="mt-1 text-1xl font-black text-white">
                         {pedido.domiciliarioNombre ?? "Sin asignar"}
                       </p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        Fecha de asignación: {formatDate(pedido.entrega?.fechaAsignacion ?? null)}
+                      </p>
                     </div>
 
                     <div className="space-y-2">

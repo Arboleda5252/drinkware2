@@ -37,7 +37,7 @@ export default function AsignarDomicilio<TPedido extends DomicilioItem>({
           <tbody className="divide-y divide-white/10 text-white/85">
             {domicilios.map((pedido) => {
               const entrega = pedido.entrega;
-              const estadoEntrega = entrega?.estadoEntrega ?? "pendiente";
+              const estadoEntrega = entrega?.estadoEntrega ?? "Pendiente";
 
               return (
                 <tr key={pedido.idPedido} className="text-center transition hover:bg-white/6">

@@ -60,6 +60,13 @@ const toDto = (row: EntregaRow) => ({
   observacion: row.observacion,
 });
 
+function normalizeEstadoEntrega(value: string | null) {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 async function getTipoEntregaPedido(idPedido: number) {
   const { rows } = await sql<{ tipoEntrega: string | null }>(
     `
@@ -131,8 +138,9 @@ export async function POST(req: NextRequest) {
     const ciudad = textOrNull(body?.ciudad);
     const telefonoContacto = textOrNull(body?.telefonoContacto ?? body?.telefono_contacto);
     const nombreRecibe = textOrNull(body?.nombreRecibe ?? body?.nombre_recibe);
-    const estadoEntrega =
-      textOrNull(body?.estadoEntrega ?? body?.estado_entrega) ?? "pendiente";
+    const estadoEntregaInput = normalizeEstadoEntrega(
+      textOrNull(body?.estadoEntrega ?? body?.estado_entrega)
+    );
     const observacion = textOrNull(body?.observacion);
 
     const parseDateOrNull = (value: unknown, field: string) => {
@@ -196,6 +204,10 @@ export async function POST(req: NextRequest) {
       (tipoEntregaPedido ?? "").toLowerCase() === "domicilio"
         ? null
         : fechaHoraRetiroResult.value;
+    const fechaAsignacion =
+      fechaAsignacionResult.value ?? (idDomiciliario !== null ? new Date().toISOString() : null);
+    const estadoEntrega =
+      estadoEntregaInput ?? (idDomiciliario !== null ? "Asignada" : "Pendiente");
 
     const { rows } = await sql<EntregaRow>(
       `
@@ -260,7 +272,7 @@ export async function POST(req: NextRequest) {
         costoEnvio,
         estadoEntrega,
         fechaProgramadaResult.value,
-        fechaAsignacionResult.value,
+        fechaAsignacion,
         fechaSalidaResult.value,
         fechaEntregaResult.value,
         fechaHoraRetiro,
