@@ -12,6 +12,7 @@ type UserLayoutProps = {
 type MenuLink = {
   href: string;
   label: string;
+  badgeCount?: number;
 };
 
 export default async function UserLayout({ children }: UserLayoutProps) {
@@ -21,9 +22,10 @@ export default async function UserLayout({ children }: UserLayoutProps) {
   }
 
   const vendedorActivo = user.id_rol === 3 ? await getVendedorActivo(user.idusuario) : undefined;
+  const adminNotificationCount = user.id_rol === 2 ? await getAdminNotificationCount() : 0;
   const displayName = user.nombre || user.nombreusuario;
   const displayRole = user.rol ?? "Usuario";
-  const menuLinks = Link_Roles(user.id_rol, vendedorActivo);
+  const menuLinks = Link_Roles(user.id_rol, vendedorActivo, adminNotificationCount);
   const roleLogo = getRoleLogo(user.id_rol);
 
   return (
@@ -60,9 +62,14 @@ export default async function UserLayout({ children }: UserLayoutProps) {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="flex items-center rounded-xl border border-white/10 bg-gray-200/12 px-4 py-3 text-sm font-semibold text-white/85 transition hover:border-sky-300/30 hover:bg-gray-300/18 hover:text-white"
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-gray-200/12 px-4 py-3 text-sm font-semibold text-white/85 transition hover:border-sky-300/30 hover:bg-gray-300/18 hover:text-white"
                   >
-                    {link.label}
+                    <span>{link.label}</span>
+                    {typeof link.badgeCount === "number" ? (
+                      <span className="inline-flex min-w-6 items-center justify-center rounded-full border border-rose-300/35 bg-rose-500 px-2 py-0.5 text-[11px] font-black leading-none text-white shadow-[0_0_18px_rgba(244,63,94,0.45)]">
+                        {link.badgeCount}
+                      </span>
+                    ) : null}
                   </Link>
                 ))}
               </nav>
@@ -94,6 +101,39 @@ async function getVendedorActivo(userId: number) {
   return Boolean(rows[0].estado);
 }
 
+async function getAdminNotificationCount() {
+  const [inventarioResult, proveedorResult, entregasResult] = await Promise.all([
+    sql<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM public.producto
+        WHERE stock < 20;
+      `
+    ),
+    sql<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM public.pedidosproveedor;
+      `
+    ),
+    sql<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM public.pedido AS p
+        LEFT JOIN public.entrega AS e
+          ON e.id_pedido = p.id_pedido
+        WHERE LOWER(COALESCE(TRIM(p.tipo_entrega), '')) = 'domicilio';
+      `
+    ),
+  ]);
+
+  const inventario = Number(inventarioResult.rows[0]?.count ?? 0);
+  const proveedor = Number(proveedorResult.rows[0]?.count ?? 0);
+  const entregas = Number(entregasResult.rows[0]?.count ?? 0);
+
+  return inventario + proveedor + entregas;
+}
+
 function getRoleLogo(roleId: number | null | undefined) {
   switch (roleId) {
     case 2:
@@ -109,7 +149,7 @@ function getRoleLogo(roleId: number | null | undefined) {
   }
 }
 
-function Link_Roles(roleId: number | null | undefined, vendedorActivo?: boolean): MenuLink[] {
+function Link_Roles(roleId: number | null | undefined, vendedorActivo?: boolean, adminNotificationCount = 0): MenuLink[] {
   const defaultLinks: MenuLink[] = [
     { href: "/user/usuario", label: "Mi cuenta" },
     { href: "/user/usuario/compras", label: "Mis compras" },
@@ -120,7 +160,7 @@ function Link_Roles(roleId: number | null | undefined, vendedorActivo?: boolean)
     case 2:
       return [
         ...defaultLinks,
-        { href: "/user/admin/alertas", label: "Notificaciones" },
+        { href: "/user/admin/alertas", label: "Notificaciones", badgeCount: adminNotificationCount },
         { href: "/user/admin", label: "Gestion de usuarios" },
         { href: "/user/admin/products", label: "Gestion de productos" },
         { href: "/user/vendedor", label: "Gestion de Ventas" },

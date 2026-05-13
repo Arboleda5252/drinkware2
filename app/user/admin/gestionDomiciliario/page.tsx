@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FaSpinner } from "react-icons/fa";
 import AsignarDomicilio from "./asignarDomicilio";
 import EntregaModal from "./entrega";
@@ -123,6 +124,9 @@ function normalizeText(value: string | null | undefined) {
 type ModalType = "domiciliarios" | "retiros" | "domicilios" | null;
 
 export default function GestionDomiciliarioPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [domiciliarios, setDomiciliarios] = React.useState<Domiciliario[]>([]);
   const [usuarios, setUsuarios] = React.useState<Usuario[]>([]);
   const [pedidos, setPedidos] = React.useState<Pedido[]>([]);
@@ -138,6 +142,8 @@ export default function GestionDomiciliarioPage() {
   const [activeModal, setActiveModal] = React.useState<ModalType>(null);
   const [detailPedido, setDetailPedido] = React.useState<DomicilioView | null>(null);
   const [horarioDomiciliario, setHorarioDomiciliario] = React.useState<DomiciliarioView | null>(null);
+
+  const pedidoParam = searchParams.get("pedido");
 
   React.useEffect(() => {
     let cancelled = false;
@@ -335,6 +341,30 @@ export default function GestionDomiciliarioPage() {
     [pedidos, entregas, domiciliariosView, pagos, detallesPedido, productos, vendedoresMap]
   );
 
+  const pedidoSolicitadoId = React.useMemo(() => {
+    if (!pedidoParam) return null;
+    const parsed = Number(pedidoParam);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }, [pedidoParam]);
+
+  const clearPedidoQuery = React.useCallback(() => {
+    if (!pedidoParam) return;
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("pedido");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [pathname, pedidoParam, router, searchParams]);
+
+  React.useEffect(() => {
+    if (loading || pedidoSolicitadoId === null) return;
+    const pedidoSolicitado = domicilios.find((item) => item.idPedido === pedidoSolicitadoId);
+    if (!pedidoSolicitado) return;
+
+    setActiveModal(null);
+    setDetailPedido((prev) => (prev?.idPedido === pedidoSolicitado.idPedido ? prev : pedidoSolicitado));
+    clearPedidoQuery();
+  }, [clearPedidoQuery, domicilios, loading, pedidoSolicitadoId]);
+
   const activeDomiciliarios = React.useMemo(
     () => domiciliariosView.filter((item) => normalizeText(item.estadoLaboral) === "activo"),
     [domiciliariosView]
@@ -450,6 +480,11 @@ export default function GestionDomiciliarioPage() {
     setDetailPedido(null);
     setHorarioDomiciliario(null);
   };
+
+  const closeDetailPedido = React.useCallback(() => {
+    setDetailPedido(null);
+    clearPedidoQuery();
+  }, [clearPedidoQuery]);
 
   return (
     <section className="mx-auto max-w-7xl space-y-8 text-white">
@@ -603,7 +638,7 @@ export default function GestionDomiciliarioPage() {
           onAssignEntrega={(idDomiciliario) => {
             void assignEntrega(detailPedido, idDomiciliario);
           }}
-          onClose={() => setDetailPedido(null)}
+          onClose={closeDetailPedido}
         />
       )}
 

@@ -254,13 +254,6 @@ export default function Page() {
             Administrar cuenta
           </button>
 
-          <Link
-            href="/user/usuario/pago"
-            className="inline-flex w-full items-center justify-center rounded-xl px-5 py-3 font-medium text-black shadow-sm ring-1 ring-gray-200 hover:bg-sky-300"
-          >
-            Metodo de pago
-          </Link>
-
           <button
             onClick={() => setShowDeleteModal(true)}
             className="inline-flex w-full items-center justify-center rounded-xl px-5 py-3 font-medium text-black shadow-sm ring-1 ring-gray-200 hover:bg-red-300"
