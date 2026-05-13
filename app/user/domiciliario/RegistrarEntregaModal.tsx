@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import CameraCapture from "../HistorialEntregas/CameraCapture";
+import CameraCapture from "./HistorialEntregas/CameraCapture";
 
 interface Pedido {
   idPedido: number;
@@ -33,7 +33,6 @@ export default function RegistrarEntregaModal({
   const [nombreRecibe, setNombreRecibe] = useState("");
   const [observacion, setObservacion] = useState("");
   const [showCamera, setShowCamera] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,7 +42,6 @@ export default function RegistrarEntregaModal({
 
   const fetchPedidos = async () => {
     try {
-      setLoading(true);
       const response = await fetch("/api/pedidos?estado=asignado");
       const data = await response.json();
 
@@ -52,8 +50,6 @@ export default function RegistrarEntregaModal({
       }
     } catch (error) {
       console.error("Error al cargar pedidos:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -64,30 +60,28 @@ export default function RegistrarEntregaModal({
     if (!pedido) return;
 
     try {
-      const response = await fetch("/api/entregas-historial", {
-        method: "POST",
+      const entregaResponse = await fetch(`/api/entrega/${pedido.idEntrega}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          idEntrega: pedido.idEntrega,
-          nombreRecibe: nombreRecibe || pedido.nombreRecibe,
-          fotoEvidencia: photoBase64,
+          estadoEntrega: "Entregado",
           observacion: observacion || null,
+          fotoEvidencia: photoBase64,
         }),
       });
 
-      const data = await response.json();
+      const entregaData = await entregaResponse.json();
 
-      if (data.ok) {
-        alert("Entrega registrada exitosamente");
-        setShowCamera(false);
-        setSelectedPedido(null);
-        setNombreRecibe("");
-        setObservacion("");
-        onEntregaRegistrada();
-        onClose();
-      } else {
-        alert(data.error || "Error al registrar la entrega");
+      if (!entregaResponse.ok || !entregaData?.ok) {
+        throw new Error(entregaData?.error || "Error al actualizar la entrega");
       }
+      alert("Entrega registrada exitosamente");
+      setShowCamera(false);
+      setSelectedPedido(null);
+      setNombreRecibe("");
+      setObservacion("");
+      onEntregaRegistrada();
+      onClose();
     } catch (error) {
       console.error("Error:", error);
       alert("Error al registrar la entrega");

@@ -11,6 +11,7 @@ type HistorialEntregaRow = {
   estadoNuevo: string;
   fechaCambio: Date | string;
   comentario: string | null;
+  fotoEvidencia: string | null;
 };
 
 type EntregaEstadoRow = {
@@ -24,7 +25,8 @@ const baseSelect = `
     estado_anterior AS "estadoAnterior",
     estado_nuevo AS "estadoNuevo",
     fecha_cambio AS "fechaCambio",
-    comentario
+    comentario,
+    foto_evidencia AS "fotoEvidencia"
   FROM public.historial_entrega
 `;
 
@@ -38,6 +40,7 @@ const toDto = (row: HistorialEntregaRow) => ({
   estadoNuevo: row.estadoNuevo,
   fechaCambio: toIsoString(row.fechaCambio),
   comentario: row.comentario,
+  fotoEvidencia: row.fotoEvidencia,
 });
 
 function readPositiveInt(value: unknown) {
@@ -51,6 +54,12 @@ function readText(value: unknown) {
 
 function readNullableText(value: unknown) {
   const text = readText(value);
+  return text ? text : null;
+}
+
+function readNullableImageData(value: unknown) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
   return text ? text : null;
 }
 
@@ -225,23 +234,27 @@ export async function POST(req: NextRequest) {
     }
 
     const comentario = readNullableText(body?.comentario);
+    const fotoEvidencia = readNullableImageData(
+      body?.fotoEvidencia ?? body?.foto_evidencia
+    );
     const fechaCambio = fechaCambioResult.value ?? new Date().toISOString();
 
     const { rows } = await sql<HistorialEntregaRow>(
       `
         INSERT INTO public.historial_entrega
-          (id_entrega, estado_anterior, estado_nuevo, fecha_cambio, comentario)
+          (id_entrega, estado_anterior, estado_nuevo, fecha_cambio, comentario, foto_evidencia)
         VALUES
-          ($1::integer, $2::varchar(20), $3::varchar(20), $4::timestamp, $5::text)
+          ($1::integer, $2::varchar(20), $3::varchar(20), $4::timestamp, $5::text, $6::text)
         RETURNING
           id_historial AS "idHistorial",
           id_entrega AS "idEntrega",
           estado_anterior AS "estadoAnterior",
           estado_nuevo AS "estadoNuevo",
           fecha_cambio AS "fechaCambio",
-          comentario;
+          comentario,
+          foto_evidencia AS "fotoEvidencia";
       `,
-      [idEntrega, estadoAnterior, estadoNuevo, fechaCambio, comentario]
+      [idEntrega, estadoAnterior, estadoNuevo, fechaCambio, comentario, fotoEvidencia]
     );
 
     return NextResponse.json({ ok: true, data: toDto(rows[0]) }, { status: 201 });

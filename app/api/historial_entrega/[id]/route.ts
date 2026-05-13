@@ -13,6 +13,7 @@ type HistorialEntregaRow = {
   estadoNuevo: string;
   fechaCambio: Date | string;
   comentario: string | null;
+  fotoEvidencia: string | null;
 };
 
 type EntregaEstadoRow = {
@@ -26,7 +27,8 @@ const selectById = `
     estado_anterior AS "estadoAnterior",
     estado_nuevo AS "estadoNuevo",
     fecha_cambio AS "fechaCambio",
-    comentario
+    comentario,
+    foto_evidencia AS "fotoEvidencia"
   FROM public.historial_entrega
   WHERE id_historial = $1;
 `;
@@ -41,6 +43,7 @@ const toDto = (row: HistorialEntregaRow) => ({
   estadoNuevo: row.estadoNuevo,
   fechaCambio: toIsoString(row.fechaCambio),
   comentario: row.comentario,
+  fotoEvidencia: row.fotoEvidencia,
 });
 
 function readPositiveInt(value: unknown) {
@@ -54,6 +57,12 @@ function readText(value: unknown) {
 
 function readNullableText(value: unknown) {
   const text = readText(value);
+  return text ? text : null;
+}
+
+function readNullableImageData(value: unknown) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
   return text ? text : null;
 }
 
@@ -306,6 +315,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
       addUpdate("comentario", readNullableText(body?.comentario));
     }
 
+    if (body?.fotoEvidencia !== undefined || body?.foto_evidencia !== undefined) {
+      addUpdate(
+        "foto_evidencia",
+        readNullableImageData(body?.fotoEvidencia ?? body?.foto_evidencia)
+      );
+    }
+
     if (!updates.length) {
       return NextResponse.json(
         { ok: false, error: "No hay campos validos para actualizar" },
@@ -326,7 +342,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
           estado_anterior AS "estadoAnterior",
           estado_nuevo AS "estadoNuevo",
           fecha_cambio AS "fechaCambio",
-          comentario;
+          comentario,
+          foto_evidencia AS "fotoEvidencia";
       `,
       values
     );

@@ -224,43 +224,22 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
     <main className="mx-auto max-w-5xl px-6 py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Detalle del pedido #{pedido.idPedido}</h1>
+          <h1 className="text-3xl font-semibold text-slate-900">Detalle de la entrega</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Informacion del pedido, entrega, pago y detalle de productos.
+            Informacion de la entrega, pago y detalle de productos.
           </p>
+          <p className="text-sm text-slate-500"># Referencia de Pedido: {pedido.idPedido}</p>
         </div>
         <Link
           href="/user/domiciliario"
           className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
         >
-          Volver a pedidos
+          Volver a mis entregas
         </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
-          <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-            <h2 className="text-xl font-semibold text-slate-900">Resumen del pedido</h2>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Pedido</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">#{pedido.idPedido}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Estado del pedido</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{getStatusLabel(pedido.estadoPedido)}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Estado de la entrega</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{getStatusLabel(entrega.estadoEntrega)}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Tipo de entrega</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{pedido.tipoEntrega ?? "No disponible"}</p>
-              </div>
-            </div>
-          </section>
-
           <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
             <h2 className="text-xl font-semibold text-slate-900">Entrega</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -297,14 +276,6 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
               <div className="rounded-3xl bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Estado de pago</p>
                 <p className="mt-1 text-base font-semibold text-slate-900">{getStatusLabel(pago?.estadoPago ?? null)}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Monto</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{pago ? formatoCOP.format(pago.monto) : "No disponible"}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Fecha de pago</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{formatDate(pago?.fechaPago ?? null)}</p>
               </div>
             </div>
           </section>

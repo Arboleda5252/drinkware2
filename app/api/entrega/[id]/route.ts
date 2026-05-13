@@ -206,6 +206,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const updateIndexes = new Map<string, number>();
     let nextIdDomiciliario: number | null | undefined = undefined;
     let nextObservacion: string | null | undefined = undefined;
+    let nextFotoEvidencia: string | null = null;
 
     const addUpdate = (column: string, value: number | string | null) => {
       const existingIndex = updateIndexes.get(column);
@@ -220,6 +221,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
     };
 
     const textOrNull = (value: unknown) =>
+      typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+
+    const imageDataOrNull = (value: unknown) =>
       typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 
     const parseDateOrNull = (value: unknown, field: string) => {
@@ -416,6 +420,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
       addUpdate("observacion", nextObservacion);
     }
 
+    if (body?.fotoEvidencia !== undefined || body?.foto_evidencia !== undefined) {
+      nextFotoEvidencia = imageDataOrNull(body?.fotoEvidencia ?? body?.foto_evidencia);
+    }
+
     if (
       (estadoEntregaInput === "No_entregado" || estadoEntregaInput === "Cancelado") &&
       nextObservacion === undefined
@@ -494,9 +502,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
       await sql<HistorialEntregaRow>(
         `
           INSERT INTO public.historial_entrega
-            (id_entrega, estado_anterior, estado_nuevo, fecha_cambio, comentario)
+            (id_entrega, estado_anterior, estado_nuevo, fecha_cambio, comentario, foto_evidencia)
           VALUES
-            ($1::integer, $2::varchar(20), $3::varchar(20), $4::timestamp, $5::text)
+            ($1::integer, $2::varchar(20), $3::varchar(20), $4::timestamp, $5::text, $6::text)
           RETURNING id_historial AS "idHistorial";
         `,
         [
@@ -505,6 +513,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
           estadoEntregaInput,
           new Date().toISOString(),
           comentario,
+          nextFotoEvidencia,
         ]
       );
     }
