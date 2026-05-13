@@ -17,7 +17,7 @@ export default async function Page() {
             : "Bienvenido al panel del domiciliario. Aquí podrás gestionar tus entregas y consultar tus pedidos asignados."}
         </p>
       </header>
-      <DomiciliarioPedidos />
+      <DomiciliarioPedidos currentUserId={user?.idusuario ?? null} />
     </main>
   );
 }

@@ -20,6 +20,7 @@ type EntregaRow = {
   fechaAsignacion: string | null;
   fechaSalida: string | null;
   fechaEntrega: string | null;
+  fechaCancelado: string | null;
   fechaHoraRetiro: string | null;
   observacion: string | null;
 };
@@ -39,6 +40,7 @@ const selectById = `
     fecha_asignacion AS "fechaAsignacion",
     fecha_salida AS "fechaSalida",
     fecha_entrega AS "fechaEntrega",
+    fecha_cancelado AS "fechaCancelado",
     fecha_hora_retiro AS "fechaHoraRetiro",
     observacion
   FROM public.entrega
@@ -59,17 +61,66 @@ const toDto = (row: EntregaRow) => ({
   fechaAsignacion: row.fechaAsignacion,
   fechaSalida: row.fechaSalida,
   fechaEntrega: row.fechaEntrega,
+  fechaCancelado: row.fechaCancelado,
   fechaHoraRetiro: row.fechaHoraRetiro,
   observacion: row.observacion,
 });
 
 const connectionErrorCodes = new Set(["ECONNREFUSED", "ENOTFOUND", "ECONNRESET", "ETIMEDOUT"]);
 
-function normalizeEstadoEntrega(value: string | null) {
+type CanonicalEstadoEntrega =
+  | "Pendiente"
+  | "Asignada"
+  | "En_camino"
+  | "Entregado"
+  | "No_entregado"
+  | "Cancelado";
+
+function normalizeEstadoEntrega(value: string | null): CanonicalEstadoEntrega | null {
   if (!value) return null;
-  const normalized = value.trim().toLowerCase();
+
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
   if (!normalized) return null;
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+
+  const map: Record<string, CanonicalEstadoEntrega> = {
+    pendiente: "Pendiente",
+    asignada: "Asignada",
+    asignado: "Asignada",
+    en_camino: "En_camino",
+    entregado: "Entregado",
+    no_entregado: "No_entregado",
+    cancelado: "Cancelado",
+  };
+
+  return map[normalized] ?? null;
+}
+
+function canTransitionEstadoEntrega(
+  current: CanonicalEstadoEntrega | null,
+  next: CanonicalEstadoEntrega
+) {
+  if (current === null) {
+    return next === "Pendiente" || next === "Asignada";
+  }
+
+  if (current === next) {
+    return true;
+  }
+
+  const allowedTransitions: Record<CanonicalEstadoEntrega, CanonicalEstadoEntrega[]> = {
+    Pendiente: [],
+    Asignada: ["En_camino", "Cancelado"],
+    En_camino: ["Entregado", "No_entregado", "Cancelado"],
+    Entregado: [],
+    No_entregado: ["En_camino", "Cancelado"],
+    Cancelado: [],
+  };
+
+  return allowedTransitions[current].includes(next);
 }
 
 async function getTipoEntregaPedidoByEntregaId(idEntrega: number) {
@@ -200,10 +251,50 @@ export async function PUT(req: NextRequest, { params }: Params) {
       addUpdate("costo_envio", costoEnvio);
     }
 
+    const { rows: existingRows } = await sql<{ estadoEntrega: string | null }>(
+      `SELECT estado_entrega AS "estadoEntrega" FROM public.entrega WHERE id_entrega = $1 LIMIT 1;`,
+      [id]
+    );
+
+    if (!existingRows[0]) {
+      return NextResponse.json({ ok: false, error: "Entrega no encontrada" }, { status: 404 });
+    }
+
+    const currentEstadoEntrega = normalizeEstadoEntrega(existingRows[0].estadoEntrega);
     const estadoEntregaInput = normalizeEstadoEntrega(
       textOrNull(body?.estadoEntrega ?? body?.estado_entrega)
     );
     if (body?.estadoEntrega !== undefined || body?.estado_entrega !== undefined) {
+      if (estadoEntregaInput === null) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Estado de entrega no valido. Use Asignada, En_camino, Entregado, No_entregado o Cancelado.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (!canTransitionEstadoEntrega(currentEstadoEntrega, estadoEntregaInput)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "No se permite retroceder el estado, excepto de No_entregado a En_camino.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (currentEstadoEntrega === "Pendiente") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "No se puede actualizar el estado mientras la entrega siga en Pendiente.",
+          },
+          { status: 400 }
+        );
+      }
+
       addUpdate("estado_entrega", estadoEntregaInput);
     } else if (nextIdDomiciliario !== undefined && nextIdDomiciliario !== null) {
       addUpdate("estado_entrega", "Asignada");
@@ -232,14 +323,33 @@ export async function PUT(req: NextRequest, { params }: Params) {
       "fecha_salida"
     );
     if (!fechaSalidaResult.ok) return fechaSalidaResult.response;
-    if (fechaSalidaResult.value !== undefined) addUpdate("fecha_salida", fechaSalidaResult.value);
+    if (fechaSalidaResult.value !== undefined) {
+      addUpdate("fecha_salida", fechaSalidaResult.value);
+    } else if (estadoEntregaInput === "En_camino") {
+      addUpdate("fecha_salida", new Date().toISOString());
+    }
 
     const fechaEntregaResult = parseDateOrNull(
       body?.fechaEntrega ?? body?.fecha_entrega,
       "fecha_entrega"
     );
     if (!fechaEntregaResult.ok) return fechaEntregaResult.response;
-    if (fechaEntregaResult.value !== undefined) addUpdate("fecha_entrega", fechaEntregaResult.value);
+    if (fechaEntregaResult.value !== undefined) {
+      addUpdate("fecha_entrega", fechaEntregaResult.value);
+    } else if (estadoEntregaInput === "Entregado") {
+      addUpdate("fecha_entrega", new Date().toISOString());
+    }
+
+    const fechaCanceladoResult = parseDateOrNull(
+      body?.fechaCancelado ?? body?.fecha_cancelado,
+      "fecha_cancelado"
+    );
+    if (!fechaCanceladoResult.ok) return fechaCanceladoResult.response;
+    if (fechaCanceladoResult.value !== undefined) {
+      addUpdate("fecha_cancelado", fechaCanceladoResult.value);
+    } else if (estadoEntregaInput === "Cancelado") {
+      addUpdate("fecha_cancelado", new Date().toISOString());
+    }
 
     const fechaHoraRetiroResult = parseDateOrNull(
       body?.fechaHoraRetiro ?? body?.fecha_hora_retiro,
@@ -287,6 +397,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
           fecha_asignacion AS "fechaAsignacion",
           fecha_salida AS "fechaSalida",
           fecha_entrega AS "fechaEntrega",
+          fecha_cancelado AS "fechaCancelado",
           fecha_hora_retiro AS "fechaHoraRetiro",
           observacion;
       `,

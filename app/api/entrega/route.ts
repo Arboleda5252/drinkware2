@@ -18,6 +18,7 @@ type EntregaRow = {
   fechaAsignacion: string | null;
   fechaSalida: string | null;
   fechaEntrega: string | null;
+  fechaCancelado: string | null;
   fechaHoraRetiro: string | null;
   observacion: string | null;
 };
@@ -37,6 +38,7 @@ const baseSelect = `
     fecha_asignacion AS "fechaAsignacion",
     fecha_salida AS "fechaSalida",
     fecha_entrega AS "fechaEntrega",
+    fecha_cancelado AS "fechaCancelado",
     fecha_hora_retiro AS "fechaHoraRetiro",
     observacion
   FROM public.entrega
@@ -56,6 +58,7 @@ const toDto = (row: EntregaRow) => ({
   fechaAsignacion: row.fechaAsignacion,
   fechaSalida: row.fechaSalida,
   fechaEntrega: row.fechaEntrega,
+  fechaCancelado: row.fechaCancelado,
   fechaHoraRetiro: row.fechaHoraRetiro,
   observacion: row.observacion,
 });
@@ -191,6 +194,14 @@ export async function POST(req: NextRequest) {
       return fechaEntregaResult.response;
     }
 
+    const fechaCanceladoResult = parseDateOrNull(
+      body?.fechaCancelado ?? body?.fecha_cancelado,
+      "fecha_cancelado"
+    );
+    if (!fechaCanceladoResult.ok) {
+      return fechaCanceladoResult.response;
+    }
+
     const fechaHoraRetiroResult = parseDateOrNull(
       body?.fechaHoraRetiro ?? body?.fecha_hora_retiro,
       "fecha_hora_retiro"
@@ -225,6 +236,7 @@ export async function POST(req: NextRequest) {
             fecha_asignacion,
             fecha_salida,
             fecha_entrega,
+            fecha_cancelado,
             fecha_hora_retiro,
             observacion
           )
@@ -243,7 +255,8 @@ export async function POST(req: NextRequest) {
             $11::timestamp,
             $12::timestamp,
             $13::timestamp,
-            $14::text
+            $14::timestamp,
+            $15::text
           )
         RETURNING
           id_entrega AS "idEntrega",
@@ -259,6 +272,7 @@ export async function POST(req: NextRequest) {
           fecha_asignacion AS "fechaAsignacion",
           fecha_salida AS "fechaSalida",
           fecha_entrega AS "fechaEntrega",
+          fecha_cancelado AS "fechaCancelado",
           fecha_hora_retiro AS "fechaHoraRetiro",
           observacion;
       `,
@@ -275,6 +289,7 @@ export async function POST(req: NextRequest) {
         fechaAsignacion,
         fechaSalidaResult.value,
         fechaEntregaResult.value,
+        fechaCanceladoResult.value,
         fechaHoraRetiro,
         observacion,
       ]
