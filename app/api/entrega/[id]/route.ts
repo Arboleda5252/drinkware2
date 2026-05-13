@@ -76,6 +76,10 @@ type CanonicalEstadoEntrega =
   | "No_entregado"
   | "Cancelado";
 
+type HistorialEntregaRow = {
+  idHistorial: number;
+};
+
 function normalizeEstadoEntrega(value: string | null): CanonicalEstadoEntrega | null {
   if (!value) return null;
 
@@ -121,6 +125,30 @@ function canTransitionEstadoEntrega(
   };
 
   return allowedTransitions[current].includes(next);
+}
+
+function buildHistorialComentario(
+  next: CanonicalEstadoEntrega,
+  observacion: string | null
+) {
+  const baseComments: Record<
+    Exclude<CanonicalEstadoEntrega, "Pendiente" | "Asignada">,
+    string
+  > = {
+    En_camino: "El pedido salio a entrega.",
+    Entregado: "El pedido fue entregado.",
+    No_entregado: "El pedido fue no entregado.",
+    Cancelado: "El pedido fue cancelado.",
+  };
+
+  const baseComment = baseComments[next as keyof typeof baseComments];
+  if (!baseComment) return null;
+
+  if (!observacion) {
+    return baseComment;
+  }
+
+  return `${baseComment} Motivo: ${observacion}`;
 }
 
 async function getTipoEntregaPedidoByEntregaId(idEntrega: number) {
@@ -175,10 +203,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json().catch(() => ({}));
     const updates: string[] = [];
     const values: Array<number | string | null> = [];
+    const updateIndexes = new Map<string, number>();
     let nextIdDomiciliario: number | null | undefined = undefined;
+    let nextObservacion: string | null | undefined = undefined;
 
     const addUpdate = (column: string, value: number | string | null) => {
+      const existingIndex = updateIndexes.get(column);
+      if (existingIndex !== undefined) {
+        values[existingIndex] = value;
+        return;
+      }
+
       values.push(value);
+      updateIndexes.set(column, values.length - 1);
       updates.push(`${column} = $${values.length}`);
     };
 
@@ -251,8 +288,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
       addUpdate("costo_envio", costoEnvio);
     }
 
-    const { rows: existingRows } = await sql<{ estadoEntrega: string | null }>(
-      `SELECT estado_entrega AS "estadoEntrega" FROM public.entrega WHERE id_entrega = $1 LIMIT 1;`,
+    const { rows: existingRows } = await sql<{
+      estadoEntrega: string | null;
+      observacion: string | null;
+    }>(
+      `
+        SELECT
+          estado_entrega AS "estadoEntrega",
+          observacion
+        FROM public.entrega
+        WHERE id_entrega = $1
+        LIMIT 1;
+      `,
       [id]
     );
 
@@ -365,7 +412,33 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
 
     if (body?.observacion !== undefined) {
-      addUpdate("observacion", textOrNull(body?.observacion));
+      nextObservacion = textOrNull(body?.observacion);
+      addUpdate("observacion", nextObservacion);
+    }
+
+    if (
+      (estadoEntregaInput === "No_entregado" || estadoEntregaInput === "Cancelado") &&
+      nextObservacion === undefined
+    ) {
+      nextObservacion = existingRows[0].observacion;
+    }
+
+    if (estadoEntregaInput === "En_camino") {
+      addUpdate("fecha_entrega", null);
+      addUpdate("fecha_cancelado", null);
+    }
+
+    if (estadoEntregaInput === "Entregado") {
+      addUpdate("fecha_cancelado", null);
+    }
+
+    if (estadoEntregaInput === "No_entregado") {
+      addUpdate("fecha_entrega", null);
+      addUpdate("fecha_cancelado", null);
+    }
+
+    if (estadoEntregaInput === "Cancelado") {
+      addUpdate("fecha_entrega", null);
     }
 
     if (!updates.length) {
@@ -406,6 +479,34 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     if (!rows[0]) {
       return NextResponse.json({ ok: false, error: "Entrega no encontrada" }, { status: 404 });
+    }
+
+    if (
+      estadoEntregaInput &&
+      estadoEntregaInput !== currentEstadoEntrega &&
+      ["En_camino", "Entregado", "No_entregado", "Cancelado"].includes(estadoEntregaInput)
+    ) {
+      const comentario = buildHistorialComentario(
+        estadoEntregaInput,
+        nextObservacion ?? existingRows[0].observacion
+      );
+
+      await sql<HistorialEntregaRow>(
+        `
+          INSERT INTO public.historial_entrega
+            (id_entrega, estado_anterior, estado_nuevo, fecha_cambio, comentario)
+          VALUES
+            ($1::integer, $2::varchar(20), $3::varchar(20), $4::timestamp, $5::text)
+          RETURNING id_historial AS "idHistorial";
+        `,
+        [
+          id,
+          currentEstadoEntrega,
+          estadoEntregaInput,
+          new Date().toISOString(),
+          comentario,
+        ]
+      );
     }
 
     return NextResponse.json({ ok: true, data: toDto(rows[0]) });

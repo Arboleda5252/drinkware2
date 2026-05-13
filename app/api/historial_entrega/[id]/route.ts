@@ -12,8 +12,11 @@ type HistorialEntregaRow = {
   estadoAnterior: string | null;
   estadoNuevo: string;
   fechaCambio: Date | string;
-  idUsuario: number;
   comentario: string | null;
+};
+
+type EntregaEstadoRow = {
+  estadoEntrega: string | null;
 };
 
 const selectById = `
@@ -23,7 +26,6 @@ const selectById = `
     estado_anterior AS "estadoAnterior",
     estado_nuevo AS "estadoNuevo",
     fecha_cambio AS "fechaCambio",
-    id_usuario AS "idUsuario",
     comentario
   FROM public.historial_entrega
   WHERE id_historial = $1;
@@ -38,7 +40,6 @@ const toDto = (row: HistorialEntregaRow) => ({
   estadoAnterior: row.estadoAnterior,
   estadoNuevo: row.estadoNuevo,
   fechaCambio: toIsoString(row.fechaCambio),
-  idUsuario: Number(row.idUsuario),
   comentario: row.comentario,
 });
 
@@ -68,6 +69,62 @@ function validateShortText(value: string, field: string, required: boolean) {
   return null;
 }
 
+function normalizeEstado(value: string | null) {
+  if (!value) return null;
+
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, "_");
+  if (!normalized) return null;
+
+  const map: Record<string, string> = {
+    pendiente: "Pendiente",
+    asignada: "Asignada",
+    asignado: "Asignada",
+    en_camino: "En_camino",
+    entregado: "Entregado",
+    no_entregado: "No_entregado",
+    cancelado: "Cancelado",
+  };
+
+  return map[normalized] ?? value.trim();
+}
+
+async function validateEstadoNuevoMatchesEntrega(
+  idEntrega: number,
+  estadoNuevo: string
+) {
+  const { rows } = await sql<EntregaEstadoRow>(
+    `
+      SELECT estado_entrega AS "estadoEntrega"
+      FROM public.entrega
+      WHERE id_entrega = $1
+      LIMIT 1;
+    `,
+    [idEntrega]
+  );
+
+  if (!rows[0]) {
+    return NextResponse.json(
+      { ok: false, error: "La entrega asociada no existe en la base de datos" },
+      { status: 400 }
+    );
+  }
+
+  const estadoEntrega = normalizeEstado(rows[0].estadoEntrega);
+  const estadoNuevoNormalizado = normalizeEstado(estadoNuevo);
+
+  if (estadoEntrega !== estadoNuevoNormalizado) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `estado_nuevo debe coincidir con el estado actual de la entrega (${estadoEntrega ?? "Sin estado"})`,
+      },
+      { status: 400 }
+    );
+  }
+
+  return null;
+}
+
 function parseDateInput(value: unknown, field: string) {
   if (value === undefined) {
     return { ok: true as const, value: undefined };
@@ -91,17 +148,9 @@ const connectionErrorCodes = new Set(["ECONNREFUSED", "ENOTFOUND", "ECONNRESET",
 function mapDatabaseError(error: unknown, fallbackMessage: string) {
   if (error instanceof DatabaseError) {
     if (error.code === "23503") {
-      const constraint = error.constraint ?? "";
-      if (constraint.includes("id_entrega")) {
-        return {
-          status: 400,
-          message: "La entrega asociada no existe en la base de datos",
-        };
-      }
-
       return {
         status: 400,
-        message: "El usuario asociado no existe en la base de datos",
+        message: "La entrega asociada no existe en la base de datos",
       };
     }
 
@@ -168,11 +217,38 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json().catch(() => ({}));
     const updates: string[] = [];
     const values: Array<number | string | null> = [];
+    let nextIdEntrega: number | null = null;
+    let nextEstadoNuevo: string | null = null;
 
     const addUpdate = (column: string, value: number | string | null) => {
       values.push(value);
       updates.push(`${column} = $${values.length}`);
     };
+
+    const { rows: existingRows } = await sql<{
+      idEntrega: number;
+      estadoNuevo: string;
+    }>(
+      `
+        SELECT
+          id_entrega AS "idEntrega",
+          estado_nuevo AS "estadoNuevo"
+        FROM public.historial_entrega
+        WHERE id_historial = $1
+        LIMIT 1;
+      `,
+      [id]
+    );
+
+    if (!existingRows[0]) {
+      return NextResponse.json(
+        { ok: false, error: "Historial de entrega no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    nextIdEntrega = Number(existingRows[0].idEntrega);
+    nextEstadoNuevo = existingRows[0].estadoNuevo;
 
     if (body?.idEntrega !== undefined || body?.id_entrega !== undefined) {
       const idEntrega = readPositiveInt(body?.idEntrega ?? body?.id_entrega);
@@ -182,6 +258,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
           { status: 400 }
         );
       }
+      nextIdEntrega = idEntrega;
       addUpdate("id_entrega", idEntrega);
     }
 
@@ -203,25 +280,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
       if (estadoNuevoError) {
         return NextResponse.json({ ok: false, error: estadoNuevoError }, { status: 400 });
       }
+      nextEstadoNuevo = estadoNuevo;
       addUpdate("estado_nuevo", estadoNuevo);
     }
 
-    if (
-      body?.idUsuario !== undefined ||
-      body?.id_usuario !== undefined ||
-      body?.usuarioId !== undefined ||
-      body?.usuario_id !== undefined
-    ) {
-      const idUsuario = readPositiveInt(
-        body?.idUsuario ?? body?.id_usuario ?? body?.usuarioId ?? body?.usuario_id
+    if (nextIdEntrega !== null && nextEstadoNuevo !== null) {
+      const estadoMismatchResponse = await validateEstadoNuevoMatchesEntrega(
+        nextIdEntrega,
+        nextEstadoNuevo
       );
-      if (idUsuario === null) {
-        return NextResponse.json(
-          { ok: false, error: "id_usuario debe ser un entero positivo" },
-          { status: 400 }
-        );
+      if (estadoMismatchResponse) {
+        return estadoMismatchResponse;
       }
-      addUpdate("id_usuario", idUsuario);
     }
 
     const fechaCambioResult = parseDateInput(body?.fechaCambio ?? body?.fecha_cambio, "fecha_cambio");
@@ -256,18 +326,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
           estado_anterior AS "estadoAnterior",
           estado_nuevo AS "estadoNuevo",
           fecha_cambio AS "fechaCambio",
-          id_usuario AS "idUsuario",
           comentario;
       `,
       values
     );
-
-    if (!rows[0]) {
-      return NextResponse.json(
-        { ok: false, error: "Historial de entrega no encontrado" },
-        { status: 404 }
-      );
-    }
 
     return NextResponse.json({ ok: true, data: toDto(rows[0]) });
   } catch (error) {

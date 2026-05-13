@@ -123,6 +123,9 @@ function normalizeText(value: string | null | undefined) {
 
 type ModalType = "domiciliarios" | "retiros" | "domicilios" | null;
 
+const HISTORIAL_ASIGNACION_COMENTARIO =
+  "Este pedido ha sido asignado a este domiciliario";
+
 export default function GestionDomiciliarioPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -410,6 +413,26 @@ export default function GestionDomiciliarioPage() {
     try {
       const domiciliarioAsignado =
         domiciliariosView.find((item) => item.idDomiciliario === idDomiciliario) ?? null;
+      const registrarHistorialAsignacion = async (
+        idEntrega: number,
+        estadoAnterior: string | null,
+        estadoNuevo: string
+      ) => {
+        const historialRes = await fetch("/api/historial_entrega", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            idEntrega,
+            estadoAnterior,
+            estadoNuevo,
+            comentario: HISTORIAL_ASIGNACION_COMENTARIO,
+          }),
+        });
+        const historialJson = await historialRes.json();
+        if (!historialRes.ok || !historialJson?.ok) {
+          throw new Error(historialJson?.error ?? `HTTP ${historialRes.status}`);
+        }
+      };
 
       if (pedido.entrega) {
         const res = await fetch(`/api/entrega/${pedido.entrega.idEntrega}`, {
@@ -425,6 +448,12 @@ export default function GestionDomiciliarioPage() {
         if (!res.ok || !json?.ok) {
           throw new Error(json?.error ?? `HTTP ${res.status}`);
         }
+
+        await registrarHistorialAsignacion(
+          json.data.idEntrega as number,
+          pedido.entrega.estadoEntrega ?? null,
+          "Asignada"
+        );
 
         setEntregas((prev) =>
           prev.map((item) => (item.idEntrega === json.data.idEntrega ? (json.data as Entrega) : item))
@@ -455,6 +484,12 @@ export default function GestionDomiciliarioPage() {
         if (!res.ok || !json?.ok) {
           throw new Error(json?.error ?? `HTTP ${res.status}`);
         }
+
+        await registrarHistorialAsignacion(
+          json.data.idEntrega as number,
+          null,
+          "Asignada"
+        );
 
         setEntregas((prev) => [json.data as Entrega, ...prev]);
         setDetailPedido((prev) =>
