@@ -35,4 +35,4 @@ jobs:
           args: >
             -Dsonar.projectKey=drinkware2
             -Dsonar.projectName=DrinkWare2
-            -Dsonar.organization=https://sonarcloud.io/organizations/nessapaternina9
+            -Dsonar.organization=nessapaterninas
