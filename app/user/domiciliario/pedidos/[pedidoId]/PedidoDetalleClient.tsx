@@ -68,6 +68,22 @@ type Pago = {
   observacion: string | null;
 };
 
+type Producto = {
+  id: number;
+  nombre: string;
+  categoria: string | null;
+};
+
+type HistorialEntrega = {
+  idHistorial: number;
+  idEntrega: number;
+  estadoAnterior: string | null;
+  estadoNuevo: string;
+  fechaCambio: string;
+  comentario: string | null;
+  fotoEvidencia: string | null;
+};
+
 type ApiResponse<T> = {
   ok?: boolean;
   data?: T;
@@ -104,6 +120,9 @@ const getStatusLabel = (value: string | null) => {
     .join(" ");
 };
 
+const isContraentrega = (value: string | null) =>
+  (value ?? "").trim().toLowerCase().replace(/\s+/g, "") === "contraentrega";
+
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
@@ -125,6 +144,8 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
   const [entrega, setEntrega] = useState<Entrega | null>(null);
   const [pago, setPago] = useState<Pago | null>(null);
   const [detalles, setDetalles] = useState<DetallePedido[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [historial, setHistorial] = useState<HistorialEntrega[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,13 +155,23 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
       setError(null);
 
       try {
-        const [pedidoData, detallesData, domiciliariosData, entregasData, pagosData] =
+        const [
+          pedidoData,
+          detallesData,
+          domiciliariosData,
+          entregasData,
+          pagosData,
+          productosData,
+          historialData,
+        ] =
           await Promise.all([
             fetchJson<Pedido>(`/api/pedidos/${pedidoId}`),
             fetchJson<DetallePedido[]>("/api/detalle_pedido"),
             fetchJson<Domiciliario[]>("/api/domiciliario"),
             fetchJson<Entrega[]>("/api/entrega"),
             fetchJson<Pago[]>("/api/pago"),
+            fetchJson<Producto[]>("/api/productos"),
+            fetchJson<HistorialEntrega[]>("/api/historial_entrega"),
           ]);
 
         const domiciliarioActual = domiciliariosData.find(
@@ -178,6 +209,15 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
         setEntrega(entregaPedido);
         setPago(pagoPedido);
         setDetalles(detallesPedido);
+        setProductos(productosData);
+        setHistorial(
+          historialData
+            .filter((item) => Number(item.idEntrega) === Number(entregaPedido.idEntrega))
+            .sort(
+              (left, right) =>
+                new Date(right.fechaCambio).getTime() - new Date(left.fechaCambio).getTime()
+            )
+        );
       } catch (loadError) {
         if (!cancelled) {
           setError(
@@ -219,6 +259,10 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
       </main>
     );
   }
+
+  const productosMap = new Map<number, Producto>(
+    productos.map((producto) => [Number(producto.id), producto])
+  );
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -278,6 +322,15 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
                 <p className="mt-1 text-base font-semibold text-slate-900">{getStatusLabel(pago?.estadoPago ?? null)}</p>
               </div>
             </div>
+
+            {isContraentrega(pago?.metodoPago ?? null) ? (
+              <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                <p className="text-sm font-semibold">Cobro pendiente al entregar</p>
+                <p className="mt-1 text-sm">
+                  Este pedido es contraentrega. Debes cobrar al cliente al momento de entregar.
+                </p>
+              </div>
+            ) : null}
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
@@ -288,7 +341,9 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
                   <div key={item.idDetallePedido} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-sm font-semibold text-slate-700">Producto #{item.idProducto}</p>
+                        <p className="text-sm font-semibold text-slate-700">
+                          {productosMap.get(Number(item.idProducto))?.nombre ?? `Producto #${item.idProducto}`}
+                        </p>
                         <p className="text-sm text-slate-500">Cantidad: {item.cantidad}</p>
                       </div>
                       <p className="text-sm font-semibold text-slate-900">
@@ -329,24 +384,27 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-            <h2 className="text-xl font-semibold text-slate-900">Fechas clave</h2>
-            <div className="mt-5 space-y-3 text-sm text-slate-600">
+            <h2 className="text-xl font-semibold text-slate-900">Historial de entrega</h2>
+            <div className="mt-5 space-y-4 text-sm text-slate-600">
               <div>
                 <p className="font-semibold text-slate-700">Creacion</p>
                 <p>{formatDate(pedido.fechaCreacion)}</p>
               </div>
-              <div>
-                <p className="font-semibold text-slate-700">Programada</p>
-                <p>{formatDate(entrega.fechaProgramada)}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-700">Salida</p>
-                <p>{formatDate(entrega.fechaSalida)}</p>
-              </div>
-              <div>
-                <p className="font-semibold text-slate-700">Entrega</p>
-                <p>{formatDate(entrega.fechaEntrega)}</p>
-              </div>
+
+              {historial.length > 0 ? (
+                historial.map((item) => (
+                  <div key={item.idHistorial} className="rounded-2xl bg-slate-50 p-4">
+                    <p className="font-semibold text-slate-700">
+                      {item.estadoAnterior ? `${getStatusLabel(item.estadoAnterior)} -> ` : ""}
+                      {getStatusLabel(item.estadoNuevo)}
+                    </p>
+                    <p className="mt-1">{formatDate(item.fechaCambio)}</p>
+                    {item.comentario ? <p className="mt-2 text-slate-500">{item.comentario}</p> : null}
+                  </div>
+                ))
+              ) : (
+                <p>No hay movimientos de historial registrados para esta entrega.</p>
+              )}
             </div>
           </div>
 

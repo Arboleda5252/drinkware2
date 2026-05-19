@@ -186,9 +186,6 @@ export default function PedidoEstadoActions({
       <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
         <div className="mb-4">
           <h2 className="text-xl font-semibold text-slate-900">Actualizar estado de entrega</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            La API actualiza el estado, sus fechas relacionadas y registra el cambio en el historial.
-          </p>
         </div>
 
         <div className="mb-4 flex items-center gap-3">

@@ -62,7 +62,9 @@ type EntregaModalPedido = {
 type ActiveDomiciliario = {
   idDomiciliario: number;
   nombreCompleto: string;
+  disponibilidadManual: string | null;
 };
+
 
 type EntregaModalProps = {
   pedido: EntregaModalPedido;
@@ -107,7 +109,7 @@ export default function EntregaModal({
             <span className="text-sm font-medium uppercase tracking-widest text-blue-400">
               {readOnly ? "Detalle de Entrega" : "Gestion de Entrega"}
             </span>
-            <h2 className="mt-1 text-4xl font-black tracking-tight text-white">Pedido #{pedido.idPedido}</h2>
+            <h2 className="mt-1 text-4xl font-black tracking-tight text-white">Pedido # {pedido.idPedido}</h2>
           </div>
         </div>
 
@@ -192,11 +194,11 @@ export default function EntregaModal({
                     {!readOnly && (
                       <div className="space-y-2">
                         <label className="text-sm font-medium text-slate-400">Seleccionar nuevo responsable</label>
-                        <select
+                        <select 
                           value={pedido.entrega?.idDomiciliario ?? ""}
                           onChange={(e) => {
                             const val = Number(e.target.value);
-                            if (val > 0) onAssignEntrega(val);
+                            if (val > 0) onAssignEntrega(val); 
                           }}
                           disabled={isAssigning || activeDomiciliarios.length === 0}
                           className="w-full appearance-none rounded-2xl border-none bg-white/10 px-5 py-4 text-white outline-none ring-1 ring-white/20 transition focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
@@ -206,7 +208,7 @@ export default function EntregaModal({
                           </option>
                           {activeDomiciliarios.map((d) => (
                             <option key={d.idDomiciliario} value={d.idDomiciliario} className="bg-slate-900">
-                              {d.nombreCompleto}
+                              {d.nombreCompleto}{d.disponibilidadManual ? ` (${d.disponibilidadManual})` : ""}
                             </option>
                           ))}
                         </select>
