@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PedidoEstadoActions from "../PedidoEstadoActions";
 
 type Props = {
@@ -111,13 +111,45 @@ const formatDate = (value: string | null) => {
   }
 };
 
+const normalizeStatus = (value: string | null | undefined) =>
+  typeof value === "string" ? value.trim().toLowerCase().replace(/\s+/g, "_") : "";
+
 const getStatusLabel = (value: string | null) => {
-  const normalized = (value ?? "").trim().toLowerCase();
-  if (!normalized) return "Pendiente";
-  return normalized
-    .split(" ")
-    .map((word) => word[0]?.toUpperCase() + word.slice(1))
-    .join(" ");
+  const normalized = normalizeStatus(value);
+
+  const labels: Record<string, string> = {
+    pendiente: "Pendiente",
+    asignada: "Asignada",
+    asignado: "Asignada",
+    en_camino: "En camino",
+    entregado: "Entregado",
+    no_entregado: "No entregado",
+    cancelado: "Cancelado",
+    pagado: "Pagado",
+    rechazado: "Rechazado",
+    reembolsado: "Reembolsado",
+  };
+
+  return labels[normalized] ?? (value ?? "Pendiente");
+};
+
+const getStatusClass = (value: string | null) => {
+  const normalized = normalizeStatus(value);
+
+  const styles: Record<string, string> = {
+    pendiente: "border border-amber-300/30 bg-amber-400/15 text-amber-100",
+    asignada: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
+    asignado: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
+    en_camino: "border border-blue-300/30 bg-blue-400/15 text-blue-100",
+    entregado: "border border-emerald-300/30 bg-emerald-400/15 text-emerald-100",
+    no_entregado: "border border-rose-300/30 bg-rose-400/15 text-rose-100",
+    cancelado: "border border-slate-400/30 bg-slate-400/15 text-slate-100",
+    pagado: "border border-emerald-300/30 bg-emerald-400/15 text-emerald-100",
+    rechazado: "border border-rose-300/30 bg-rose-400/15 text-rose-100",
+    reembolsado: "border border-violet-300/30 bg-violet-400/15 text-violet-100",
+  };
+
+  return styles[normalized] ?? "border border-slate-400/20 bg-slate-400/10 text-slate-100";
 };
 
 const isContraentrega = (value: string | null) =>
@@ -135,6 +167,23 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 
   return payload.data as T;
+}
+
+function InfoCard({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4 ${className}`}>
+      <p className="text-xs uppercase tracking-[0.24em] text-slate-400">{label}</p>
+      <p className="mt-2 text-base font-semibold text-white">{value}</p>
+    </div>
+  );
 }
 
 export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) {
@@ -163,16 +212,15 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
           pagosData,
           productosData,
           historialData,
-        ] =
-          await Promise.all([
-            fetchJson<Pedido>(`/api/pedidos/${pedidoId}`),
-            fetchJson<DetallePedido[]>("/api/detalle_pedido"),
-            fetchJson<Domiciliario[]>("/api/domiciliario"),
-            fetchJson<Entrega[]>("/api/entrega"),
-            fetchJson<Pago[]>("/api/pago"),
-            fetchJson<Producto[]>("/api/productos"),
-            fetchJson<HistorialEntrega[]>("/api/historial_entrega"),
-          ]);
+        ] = await Promise.all([
+          fetchJson<Pedido>(`/api/pedidos/${pedidoId}`),
+          fetchJson<DetallePedido[]>("/api/detalle_pedido"),
+          fetchJson<Domiciliario[]>("/api/domiciliario"),
+          fetchJson<Entrega[]>("/api/entrega"),
+          fetchJson<Pago[]>("/api/pago"),
+          fetchJson<Producto[]>("/api/productos"),
+          fetchJson<HistorialEntrega[]>("/api/historial_entrega"),
+        ]);
 
         const domiciliarioActual = domiciliariosData.find(
           (item) => Number(item.idUsuario) === currentUserId
@@ -201,9 +249,7 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
           (item) => Number(item.idPedido) === pedidoId
         );
 
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         setPedido(pedidoData);
         setEntrega(entregaPedido);
@@ -240,10 +286,15 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
     };
   }, [pedidoId, currentUserId]);
 
+  const productosMap = useMemo(
+    () => new Map<number, Producto>(productos.map((producto) => [Number(producto.id), producto])),
+    [productos]
+  );
+
   if (loading) {
     return (
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="rounded-3xl border border-slate-200 bg-white/90 p-8 text-center text-slate-600 shadow-sm shadow-slate-200/50">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center text-slate-300 shadow-[0_18px_50px_rgba(2,6,23,0.2)]">
           Cargando detalle del pedido...
         </div>
       </main>
@@ -252,111 +303,104 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
 
   if (error || !pedido || !entrega) {
     return (
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900 shadow-sm shadow-rose-100">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+        <div className="rounded-[2rem] border border-rose-400/25 bg-rose-500/10 p-6 text-rose-100 shadow-[0_18px_50px_rgba(2,6,23,0.2)]">
           {error ?? "No se encontro la informacion del pedido."}
         </div>
       </main>
     );
   }
 
-  const productosMap = new Map<number, Producto>(
-    productos.map((producto) => [Number(producto.id), producto])
-  );
-
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-        <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Detalle de la entrega</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Informacion de la entrega, pago y detalle de productos.
-          </p>
-          <p className="text-sm text-slate-500"># Referencia de Pedido: {pedido.idPedido}</p>
-        </div>
-        <Link
-          href="/user/domiciliario"
-          className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          Volver a mis entregas
-        </Link>
-      </div>
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+      <section className="relative mb-8 overflow-hidden rounded-[2rem] border border-[#c9a55c]/20 bg-[linear-gradient(135deg,rgba(2,6,23,0.96),rgba(15,23,42,0.94),rgba(30,41,59,0.92))] p-8 shadow-[0_28px_80px_rgba(2,6,23,0.45)] sm:p-10">
+        <div className="absolute -left-16 top-0 h-56 w-56 rounded-full bg-[#c9a55c]/16 blur-3xl" />
+        <div className="absolute right-0 top-8 h-64 w-64 rounded-full bg-sky-400/14 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_24%),radial-gradient(circle_at_80%_30%,rgba(56,189,248,0.18),transparent_24%)]" />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-6">
+          <div className="max-w-3xl">
+            <span className="inline-flex rounded-full border border-[#c9a55c]/35 bg-[#c9a55c]/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f5deb3]">
+              Control de ruta
+            </span>
+            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-5xl">
+              Detalle de la entrega
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+              Informacion operativa del pedido, estado de entrega, cobro y productos asignados.
+            </p>
+          </div>
+
+          <Link
+            href="/user/domiciliario"
+            className="rounded-full border border-[#c9a55c]/35 bg-[linear-gradient(135deg,#d2ac67,#9f7b32)] px-5 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110"
+          >
+            Volver a mis entregas
+          </Link>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
-          <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-            <h2 className="text-xl font-semibold text-slate-900">Entrega</h2>
+          <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+            <h2 className="text-xl font-semibold text-white">Entrega</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Persona que recibe</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{entrega.nombreRecibe ?? "No registrada"}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Telefono</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{entrega.telefonoContacto ?? "No registrado"}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4 sm:col-span-2">
-                <p className="text-sm text-slate-500">Direccion</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{entrega.direccionEntrega ?? "No registrada"}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Ciudad</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{entrega.ciudad ?? "No registrada"}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Fecha de asignacion</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{formatDate(entrega.fechaAsignacion)}</p>
-              </div>
+              <InfoCard label="Persona que recibe" value={entrega.nombreRecibe ?? "No registrada"} />
+              <InfoCard label="Telefono" value={entrega.telefonoContacto ?? "No registrado"} />
+              <InfoCard
+                label="Direccion"
+                value={entrega.direccionEntrega ?? "No registrada"}
+                className="sm:col-span-2"
+              />
+              <InfoCard label="Ciudad" value={entrega.ciudad ?? "No registrada"} />
+              <InfoCard label="Fecha de asignacion" value={formatDate(entrega.fechaAsignacion)} />
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-            <h2 className="text-xl font-semibold text-slate-900">Pago</h2>
+          <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+            <h2 className="text-xl font-semibold text-white">Pago</h2>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Metodo de pago</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{pago?.metodoPago ?? "No disponible"}</p>
-              </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Estado de pago</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{getStatusLabel(pago?.estadoPago ?? null)}</p>
-              </div>
+              <InfoCard label="Metodo de pago" value={pago?.metodoPago ?? "No disponible"} />
+              <InfoCard label="Estado de pago" value={getStatusLabel(pago?.estadoPago ?? null)} />
             </div>
 
             {isContraentrega(pago?.metodoPago ?? null) ? (
-              <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <div className="mt-4 rounded-[1.5rem] border border-amber-300/25 bg-amber-400/10 p-4 text-amber-100">
                 <p className="text-sm font-semibold">Cobro pendiente al entregar</p>
-                <p className="mt-1 text-sm">
+                <p className="mt-1 text-sm text-amber-50/90">
                   Este pedido es contraentrega. Debes cobrar al cliente al momento de entregar.
                 </p>
               </div>
             ) : null}
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-            <h2 className="text-xl font-semibold text-slate-900">Detalle de productos</h2>
+          <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+            <h2 className="text-xl font-semibold text-white">Detalle de productos</h2>
             <div className="mt-5 space-y-4">
               {detalles.length > 0 ? (
                 detalles.map((item) => (
-                  <div key={item.idDetallePedido} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div
+                    key={item.idDetallePedido}
+                    className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.82))] p-4"
+                  >
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="text-sm font-semibold text-slate-700">
+                        <p className="text-sm font-semibold text-white">
                           {productosMap.get(Number(item.idProducto))?.nombre ?? `Producto #${item.idProducto}`}
                         </p>
-                        <p className="text-sm text-slate-500">Cantidad: {item.cantidad}</p>
+                        <p className="text-sm text-slate-400">Cantidad: {item.cantidad}</p>
                       </div>
-                      <p className="text-sm font-semibold text-slate-900">
+                      <p className="text-sm font-semibold text-[#f2d79a]">
                         {formatoCOP.format(item.subtotal ?? item.cantidad * item.precioUnitario)}
                       </p>
                     </div>
-                    <div className="mt-3 text-sm text-slate-600">
+                    <div className="mt-3 text-sm text-slate-300">
                       Precio unidad: {formatoCOP.format(item.precioUnitario)}
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-slate-600">No hay detalles de productos disponibles.</p>
+                <p className="text-sm text-slate-300">No hay detalles de productos disponibles.</p>
               )}
             </div>
           </section>
@@ -372,9 +416,9 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
             currentStatus={entrega.estadoEntrega}
           />
 
-          <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-            <h2 className="text-xl font-semibold text-slate-900">Resumen de costos</h2>
-            <div className="mt-5 space-y-3 text-sm text-slate-600">
+          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+            <h2 className="text-xl font-semibold text-white">Resumen de costos</h2>
+            <div className="mt-5 space-y-3 text-sm text-slate-300">
               <div className="flex items-center justify-between">
                 <span>Subtotal</span>
                 <span>{formatoCOP.format(pedido.subtotal)}</span>
@@ -383,30 +427,30 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
                 <span>Costo envio</span>
                 <span>{formatoCOP.format(pedido.costoEnvio)}</span>
               </div>
-              <div className="border-t border-slate-200 pt-3 flex items-center justify-between text-base font-semibold text-slate-900">
+              <div className="flex items-center justify-between border-t border-white/10 pt-3 text-base font-semibold text-white">
                 <span>Total</span>
-                <span>{formatoCOP.format(pedido.total)}</span>
+                <span className="text-[#f2d79a]">{formatoCOP.format(pedido.total)}</span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-            <h2 className="text-xl font-semibold text-slate-900">Historial de entrega</h2>
-            <div className="mt-5 space-y-4 text-sm text-slate-600">
-              <div>
-                <p className="font-semibold text-slate-700">Creacion</p>
-                <p>{formatDate(pedido.fechaCreacion)}</p>
+          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+            <h2 className="text-xl font-semibold text-white">Historial de entrega</h2>
+            <div className="mt-5 space-y-4 text-sm text-slate-300">
+              <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+                <p className="font-semibold text-white">Creacion</p>
+                <p className="mt-1">{formatDate(pedido.fechaCreacion)}</p>
               </div>
 
               {historial.length > 0 ? (
                 historial.map((item) => (
-                  <div key={item.idHistorial} className="rounded-2xl bg-slate-50 p-4">
-                    <p className="font-semibold text-slate-700">
+                  <div key={item.idHistorial} className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+                    <p className="font-semibold text-white">
                       {item.estadoAnterior ? `${getStatusLabel(item.estadoAnterior)} -> ` : ""}
                       {getStatusLabel(item.estadoNuevo)}
                     </p>
-                    <p className="mt-1">{formatDate(item.fechaCambio)}</p>
-                    {item.comentario ? <p className="mt-2 text-slate-500">{item.comentario}</p> : null}
+                    <p className="mt-1 text-slate-400">{formatDate(item.fechaCambio)}</p>
+                    {item.comentario ? <p className="mt-2 text-slate-300">{item.comentario}</p> : null}
                   </div>
                 ))
               ) : (
@@ -416,9 +460,9 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
           </div>
 
           {pedido.observacion || entrega.observacion || pago?.observacion ? (
-            <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
-              <h2 className="text-xl font-semibold text-slate-900">Observaciones</h2>
-              <div className="mt-3 space-y-3 text-sm text-slate-600">
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+              <h2 className="text-xl font-semibold text-white">Observaciones</h2>
+              <div className="mt-3 space-y-3 text-sm text-slate-300">
                 {pedido.observacion ? <p>Pedido: {pedido.observacion}</p> : null}
                 {entrega.observacion ? <p>Entrega: {entrega.observacion}</p> : null}
                 {pago?.observacion ? <p>Pago: {pago.observacion}</p> : null}

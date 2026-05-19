@@ -29,19 +29,17 @@ const normalizeStatus = (value: string | null | undefined) =>
 
 const getStatusIndex = (value: string | null | undefined) => {
   const normalized = normalizeStatus(value);
-  return estadoEntregaOrder.findIndex(
-    (item) => item.toLowerCase() === normalized
-  );
+  return estadoEntregaOrder.findIndex((item) => item.toLowerCase() === normalized);
 };
 
 const statusStyles = {
-  pendiente: "bg-amber-100 text-amber-900",
-  asignada: "bg-sky-100 text-sky-900",
-  en_camino: "bg-sky-100 text-sky-900",
-  entregado: "bg-emerald-100 text-emerald-900",
-  no_entregado: "bg-rose-100 text-rose-900",
-  cancelado: "bg-slate-200 text-slate-900",
-  default: "bg-slate-100 text-slate-900",
+  pendiente: "border border-amber-300/30 bg-amber-400/15 text-amber-100",
+  asignada: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
+  en_camino: "border border-blue-300/30 bg-blue-400/15 text-blue-100",
+  entregado: "border border-emerald-300/30 bg-emerald-400/15 text-emerald-100",
+  no_entregado: "border border-rose-300/30 bg-rose-400/15 text-rose-100",
+  cancelado: "border border-slate-400/30 bg-slate-400/15 text-slate-100",
+  default: "border border-slate-400/20 bg-slate-400/10 text-slate-100",
 };
 
 const getStatusClass = (status: string | null) => {
@@ -51,9 +49,8 @@ const getStatusClass = (status: string | null) => {
 
 const getDisplayLabel = (status: string | null) => {
   if (!status) return "Pendiente";
-  const canonical = estadoEntregaOrder.find(
-    (item) => item.toLowerCase() === normalizeStatus(status)
-  ) ?? status;
+  const canonical =
+    estadoEntregaOrder.find((item) => item.toLowerCase() === normalizeStatus(status)) ?? status;
 
   const labels: Record<string, string> = {
     Pendiente: "Pendiente",
@@ -123,8 +120,7 @@ export default function PedidoEstadoActions({
   }, [currentIndex, status]);
 
   const requiresObservation = useCallback(
-    (nextState: EstadoEntrega) =>
-      nextState === "No_entregado" || nextState === "Cancelado",
+    (nextState: EstadoEntrega) => nextState === "No_entregado" || nextState === "Cancelado",
     []
   );
 
@@ -153,10 +149,7 @@ export default function PedidoEstadoActions({
 
         const updatedStateRaw = String(json.data?.estadoEntrega ?? nextState);
         const normalizedUpdatedState = normalizeStatus(updatedStateRaw);
-        if (
-          normalizedUpdatedState === "entregado" ||
-          normalizedUpdatedState === "cancelado"
-        ) {
+        if (normalizedUpdatedState === "entregado" || normalizedUpdatedState === "cancelado") {
           const estadoPedido =
             normalizedUpdatedState === "cancelado" ? "Cancelado" : "Entregado";
           const pedidoResponse = await fetch(`/api/pedidos/${pedidoId}`, {
@@ -217,9 +210,7 @@ export default function PedidoEstadoActions({
         router.refresh();
         return true;
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Error al cambiar el estado de entrega."
-        );
+        setError(err instanceof Error ? err.message : "Error al cambiar el estado de entrega.");
         return false;
       } finally {
         setLoading(false);
@@ -239,9 +230,7 @@ export default function PedidoEstadoActions({
         return;
       }
 
-      const confirmed = window.confirm(
-        `Desea cambiar el estado a ${getDisplayLabel(nextState)}?`
-      );
+      const confirmed = window.confirm(`Desea cambiar el estado a ${getDisplayLabel(nextState)}?`);
       if (!confirmed) return;
 
       void handleChangeStatus(nextState);
@@ -261,13 +250,13 @@ export default function PedidoEstadoActions({
 
   return (
     <>
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
+      <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
         <div className="mb-4">
-          <h2 className="text-xl font-semibold text-slate-900">Actualizar estado de entrega</h2>
+          <h2 className="text-xl font-semibold text-white">Actualizar estado de entrega</h2>
         </div>
 
         <div className="mb-4 flex items-center gap-3">
-          <span className="text-sm text-slate-500">Estado actual:</span>
+          <span className="text-sm text-slate-400">Estado actual:</span>
           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClass(status)}`}>
             {status}
           </span>
@@ -281,41 +270,41 @@ export default function PedidoEstadoActions({
                 type="button"
                 onClick={() => openStatusChange(nextState)}
                 disabled={loading}
-                className="rounded-2xl bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-[1.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.86))] px-4 py-3 text-left text-sm font-semibold text-white transition hover:border-sky-300/25 hover:bg-sky-400/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cambiar a {getDisplayLabel(nextState)}
               </button>
             ))
           ) : (
-            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
               Esta entrega no tiene cambios de estado disponibles desde su estado actual.
             </div>
           )}
         </div>
 
         {message ? (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <div className="mt-4 rounded-[1.25rem] border border-emerald-300/25 bg-emerald-400/10 p-4 text-sm text-emerald-100">
             {message}
           </div>
         ) : null}
         {error ? (
-          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+          <div className="mt-4 rounded-[1.25rem] border border-rose-300/25 bg-rose-400/10 p-4 text-sm text-rose-100">
             {error}
           </div>
         ) : null}
       </div>
 
       {pendingState ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(2,6,23,0.98))] p-6 shadow-[0_30px_90px_rgba(2,6,23,0.6)]">
+            <h3 className="text-lg font-semibold text-white">
               Cambiar a {getDisplayLabel(pendingState)}
             </h3>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-slate-300">
               Puedes registrar una observacion sobre el motivo. Esta observacion se guardara en la entrega y en el historial.
             </p>
 
-            <label className="mt-5 block text-sm font-medium text-slate-700">
+            <label className="mt-5 block text-sm font-medium text-slate-200">
               Observacion del motivo
             </label>
             <textarea
@@ -323,7 +312,7 @@ export default function PedidoEstadoActions({
               onChange={(event) => setObservacion(event.target.value)}
               rows={4}
               placeholder="Describe el motivo de no entrega o cancelacion"
-              className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+              className="mt-2 w-full rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/35"
             />
 
             <div className="mt-5 flex gap-3">
@@ -331,7 +320,7 @@ export default function PedidoEstadoActions({
                 type="button"
                 onClick={submitPendingState}
                 disabled={loading}
-                className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 rounded-[1.25rem] border border-[#c9a55c]/35 bg-[linear-gradient(135deg,#d2ac67,#9f7b32)] px-4 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Confirmar cambio
               </button>
@@ -343,7 +332,7 @@ export default function PedidoEstadoActions({
                   setObservacion("");
                 }}
                 disabled={loading}
-                className="flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancelar
               </button>

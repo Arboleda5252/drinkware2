@@ -21,6 +21,12 @@ const formatoCOP = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
+const formatoRetiro = new Intl.DateTimeFormat("es-CO", {
+  dateStyle: "full",
+  timeStyle: "short",
+  timeZone: "America/Bogota",
+});
+
 const normalizarEntrega = (entrega: string | null) =>
   entrega === "Retiro_tienda" ? "Retiro_tienda" : "Domicilio";
 
@@ -29,6 +35,17 @@ const normalizarMetodo = (metodo: string | null) => {
     return metodo;
   }
   return null;
+};
+
+const formatearRetiro = (value: string | null) => {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return formatoRetiro.format(parsed);
 };
 
 export default function ExitoCompraClient({
@@ -116,10 +133,9 @@ export default function ExitoCompraClient({
       return "En breve estara en tu casa.";
     }
 
-    return retiro
-      ? `Tu pedido y los productos han sido separados. Por favor ve en la fecha especificada: ${new Date(
-          retiro
-        ).toLocaleString("es-CO")}.`
+    const retiroFormateado = formatearRetiro(retiro);
+    return retiroFormateado
+      ? `Tu pedido y los productos han sido separados. Por favor ve en la fecha especificada: ${retiroFormateado}.`
       : "Tu pedido y los productos han sido separados. Por favor ve en la fecha especificada.";
   }, [entregaNormalizada, retiro]);
 
