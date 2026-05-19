@@ -363,7 +363,14 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
         </div>
 
         <aside className="space-y-6">
-          <PedidoEstadoActions entregaId={entrega.idEntrega} currentStatus={entrega.estadoEntrega} />
+          <PedidoEstadoActions
+            entregaId={entrega.idEntrega}
+            pedidoId={pedido.idPedido}
+            pagoId={pago?.idPago ?? null}
+            metodoPago={pago?.metodoPago ?? null}
+            estadoPagoActual={pago?.estadoPago ?? null}
+            currentStatus={entrega.estadoEntrega}
+          />
 
           <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
             <h2 className="text-xl font-semibold text-slate-900">Resumen de costos</h2>

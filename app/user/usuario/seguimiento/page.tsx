@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
-import { FaChevronDown } from "react-icons/fa";
+import { FaChevronDown, FaEye } from "react-icons/fa";
 import { FaMotorcycle } from "react-icons/fa6";
 import { GoClockFill } from "react-icons/go";
 
@@ -180,6 +180,7 @@ export default function Page() {
   const [observacionesHistorial, setObservacionesHistorial] = useState<Map<number, string>>(new Map());
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detalleAbierto, setDetalleAbierto] = useState<Record<string, boolean>>({});
   const [seccionesAbiertas, setSeccionesAbiertas] = useState({
     pendientes: true,
     entregados: false,
@@ -364,6 +365,22 @@ export default function Page() {
     }));
   };
 
+  const toggleDetallePedido = (
+    key: "pendientes" | "entregados" | "cancelados",
+    pedidoId: number
+  ) => {
+    const stateKey = `${key}-${pedidoId}`;
+    setDetalleAbierto((prev) => ({
+      ...prev,
+      [stateKey]: !(prev[stateKey] ?? (key === "pendientes")),
+    }));
+  };
+
+  const isDetallePedidoAbierto = (
+    key: "pendientes" | "entregados" | "cancelados",
+    pedidoId: number
+  ) => detalleAbierto[`${key}-${pedidoId}`] ?? (key === "pendientes");
+
   const obtenerNombreDomiciliario = (idDomiciliario: number | null) => {
     if (!idDomiciliario) {
       return "Pendiente por asignar";
@@ -382,8 +399,10 @@ export default function Page() {
 
   const renderPedido = (
     { pedido, detalles, pago, entrega }: PedidoConDetalle,
-    esSeccionPendientes: boolean
+    seccionKey: "pendientes" | "entregados" | "cancelados"
   ) => {
+    const esSeccionPendientes = seccionKey === "pendientes";
+    const esSeccionCancelados = seccionKey === "cancelados";
     const esRetiroTienda = pedido.tipoEntrega === "Retiro_tienda";
     const esDomicilio = !esRetiroTienda;
     const totalPedido = pedido.subtotal + pedido.costoEnvio;
@@ -398,6 +417,43 @@ export default function Page() {
         : "Tu pedido esta pendiente para recoger en tienda."
       : `Estado de entrega: ${entrega?.estadoEntrega ?? "Pendiente"}`;
     const observacionIncidencia = obtenerObservacionIncidencia(entrega);
+    const mostrarSeguimientoEntrega = esDomicilio && (esSeccionPendientes || pasoDomicilioActivo === 3);
+    const detalleVisible = isDetallePedidoAbierto(seccionKey, pedido.idPedido);
+    const observacionCancelacion =
+      observacionIncidencia ??
+      entrega?.observacion ??
+      pago?.observacion ??
+      pedido.observacion ??
+      "Sin observacion registrada.";
+
+    if (esSeccionCancelados) {
+      return (
+        <article
+          key={pedido.idPedido}
+          className="rounded-3xl border border-white/10 bg-white/10 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.32)] backdrop-blur-md"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-bold text-white">Compra cancelada</h2>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <p className="text-slate-400">
+              <span className="font-semibold text-slate-300">Fecha:</span>{" "}
+              {new Date(pedido.fechaCreacion).toLocaleString()}
+            </p>
+            <p className="text-slate-400">
+              <span className="font-semibold text-slate-300">Valor:</span>{" "}
+              <span className="font-semibold text-white">{formatoCOP.format(totalPedido)}</span>
+            </p>
+          </div>
+
+          <p className="mt-3 text-sm leading-6 text-rose-200">
+            <span className="font-semibold text-rose-100">Observacion:</span>{" "}
+            {observacionCancelacion}
+          </p>
+        </article>
+      );
+    }
 
     return (
       <article
@@ -414,10 +470,26 @@ export default function Page() {
               {(pedido.estadoPedido ?? "").toLowerCase() === "pendiente" && (
                 <p className="mt-1 text-base text-slate-300">{mensajePendiente}</p>
               )}
+              {!esSeccionPendientes && (
+                <p className="mt-1 text-sm text-slate-400">
+                  {detalles.length} producto{detalles.length === 1 ? "" : "s"} | Total{" "}
+                  {formatoCOP.format(totalPedido)}
+                </p>
+              )}
             </div>
+            <button
+              type="button"
+              onClick={() => toggleDetallePedido(seccionKey, pedido.idPedido)}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-black/30"
+            >
+              <FaEye className="h-4 w-4" />
+              {detalleVisible ? "Ocultar" : "Ver detalle"}
+            </button>
           </div>
         </div>
 
+        {detalleVisible ? (
+        <>
         <div className="space-y-4 px-6 py-5">
           {detalles.map(({ detalle, producto }) => {
             const imagen = producto?.imagen || placeholderImagen;
@@ -463,11 +535,15 @@ export default function Page() {
         </div>
 
         {esDomicilio ? (
-          <div className="border-t border-white/10 bg-black/10 px-6 py-5">
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/5">
-                <p className="text-base font-semibold text-slate-200">Entrega</p>
-                <p className="mt-2 text-base text-slate-300">Tipo: Domicilio</p>
+          <div className="border-t border-white/10 bg-black/10 px-6 py-4">
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3.5 ring-1 ring-white/5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-100">Entrega</p>
+                  <span className="rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-200">
+                    Domicilio
+                  </span>
+                </div>
                 {/* {esSeccionPendientes && (
                   <div className="mt-4">
                     <div className="mb-3 flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -500,9 +576,9 @@ export default function Page() {
                     </div>
                   </div>
                 )} */}
-                {esSeccionPendientes && (
-                  <div className="mt-6 rounded-xl bg-slate-900/40 p-4 border border-slate-800/60 backdrop-blur-sm">
-                    <div className="mb-4 flex items-center justify-between gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                {mostrarSeguimientoEntrega && (
+                  <div className="mt-4 rounded-xl border border-slate-800/60 bg-slate-900/40 p-3.5 backdrop-blur-sm">
+                    <div className="mb-3 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
                       <span>Seguimiento de entrega</span>
                     </div>
 
@@ -584,67 +660,80 @@ export default function Page() {
                     </div>
                   </div>
                 )}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Domiciliario
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {obtenerNombreDomiciliario(entrega?.idDomiciliario ?? null)}
-                    </p>
+                {esSeccionPendientes ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Domiciliario
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {obtenerNombreDomiciliario(entrega?.idDomiciliario ?? null)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Recibe
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {entrega?.nombreRecibe ?? "Sin registrar"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3 sm:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Direccion de entrega
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {entrega?.direccionEntrega ?? "Sin registrar"}
+                      </p>
+                      <p className="mt-1 text-base text-slate-400">
+                        Ciudad: {entrega?.ciudad ?? "Sin registrar"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Fecha programada
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaProgramada)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Fecha de asignacion
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaAsignacion)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Salida
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaSalida)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Entrega final
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaEntrega)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Recibe
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {entrega?.nombreRecibe ?? "Sin registrar"}
-                    </p>
+                ) : (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Fecha de entrega
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaEntrega)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="rounded-2xl bg-black/10 p-3 sm:col-span-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Direccion de entrega
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {entrega?.direccionEntrega ?? "Sin registrar"}
-                    </p>
-                    <p className="mt-1 text-base text-slate-400">
-                      Ciudad: {entrega?.ciudad ?? "Sin registrar"}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Fecha programada
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaProgramada)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Fecha de asignacion
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaAsignacion)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Salida
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaSalida)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Entrega final
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaEntrega)}
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -720,6 +809,8 @@ export default function Page() {
             </div>
           </div>
         )}
+        </>
+        ) : null}
       </article>
     );
   };
@@ -757,7 +848,7 @@ export default function Page() {
             </div>
           ) : (
             <div className="space-y-6">
-              {items.map((item) => renderPedido(item, key === "pendientes"))}
+              {items.map((item) => renderPedido(item, key))}
             </div>
           )}
         </div>
@@ -773,9 +864,8 @@ export default function Page() {
             <h1 className="text-3xl font-bold text-white">Mis pedidos</h1>
             {usuarioActivo && (
               <p className="mt-2 text-sm text-slate-300">
-                Hola,
-                <span className="font-semibold text-white">
-                  {usuarioActivo.nombre} {usuarioActivo.apellido}
+                Hola, <span className="font-semibold text-white">
+                   {usuarioActivo.nombre} {usuarioActivo.apellido}
                 </span>
                 . Aquí puedes rastrear tus productos.
               </p>

@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 
 type Props = {
   entregaId: number;
+  pedidoId: number;
+  pagoId?: number | null;
+  metodoPago?: string | null;
+  estadoPagoActual?: string | null;
   currentStatus: string | null;
   onUpdated?: (newStatus: string) => void;
 };
@@ -63,8 +67,23 @@ const getDisplayLabel = (status: string | null) => {
   return labels[canonical] ?? canonical;
 };
 
+const isEstadoPagado = (value: string | null | undefined) =>
+  normalizeStatus(value) === "pagado";
+
+const isMetodoContraentrega = (value: string | null | undefined) =>
+  normalizeStatus(value).includes("contraentrega");
+
+const isMetodoTarjeta = (value: string | null | undefined) => {
+  const normalized = normalizeStatus(value);
+  return normalized === "tarjeta" || normalized === "stripe" || normalized === "pago_online";
+};
+
 export default function PedidoEstadoActions({
   entregaId,
+  pedidoId,
+  pagoId,
+  metodoPago,
+  estadoPagoActual,
   currentStatus,
   onUpdated,
 }: Props) {
@@ -132,7 +151,66 @@ export default function PedidoEstadoActions({
           throw new Error(json?.error ?? "No se pudo actualizar el estado.");
         }
 
-        const updatedState = getDisplayLabel(json.data?.estadoEntrega ?? nextState);
+        const updatedStateRaw = String(json.data?.estadoEntrega ?? nextState);
+        const normalizedUpdatedState = normalizeStatus(updatedStateRaw);
+        if (
+          normalizedUpdatedState === "entregado" ||
+          normalizedUpdatedState === "cancelado"
+        ) {
+          const estadoPedido =
+            normalizedUpdatedState === "cancelado" ? "Cancelado" : "Entregado";
+          const pedidoResponse = await fetch(`/api/pedidos/${pedidoId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ estadoPedido }),
+          });
+
+          const pedidoJson = await pedidoResponse.json().catch(() => null);
+          if (!pedidoResponse.ok || !pedidoJson?.ok) {
+            throw new Error(
+              pedidoJson?.error ?? "La entrega se actualizo, pero no se pudo sincronizar el estado del pedido."
+            );
+          }
+        }
+
+        if (pagoId) {
+          let siguienteEstadoPago: string | null = null;
+
+          if (normalizedUpdatedState === "entregado" && !isEstadoPagado(estadoPagoActual)) {
+            siguienteEstadoPago = "Pagado";
+          } else if (normalizedUpdatedState === "cancelado") {
+            if (isMetodoContraentrega(metodoPago)) {
+              siguienteEstadoPago = "Rechazado";
+            } else if (isMetodoTarjeta(metodoPago)) {
+              siguienteEstadoPago = "Reembolsado";
+            }
+          }
+
+          if (
+            siguienteEstadoPago &&
+            normalizeStatus(estadoPagoActual) !== normalizeStatus(siguienteEstadoPago)
+          ) {
+            const pagoResponse = await fetch(`/api/pago/${pagoId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                estadoPago: siguienteEstadoPago,
+                ...(siguienteEstadoPago === "Pagado"
+                  ? { fechaPago: new Date().toISOString() }
+                  : {}),
+              }),
+            });
+
+            const pagoJson = await pagoResponse.json().catch(() => null);
+            if (!pagoResponse.ok || !pagoJson?.ok) {
+              throw new Error(
+                pagoJson?.error ?? "La entrega se actualizo, pero no se pudo sincronizar el estado del pago."
+              );
+            }
+          }
+        }
+
+        const updatedState = getDisplayLabel(updatedStateRaw);
         setStatus(updatedState);
         setMessage(`Estado actualizado a ${updatedState}.`);
         onUpdated?.(updatedState);
@@ -147,7 +225,7 @@ export default function PedidoEstadoActions({
         setLoading(false);
       }
     },
-    [entregaId, onUpdated, router]
+    [entregaId, estadoPagoActual, metodoPago, onUpdated, pagoId, pedidoId, router]
   );
 
   const openStatusChange = useCallback(
