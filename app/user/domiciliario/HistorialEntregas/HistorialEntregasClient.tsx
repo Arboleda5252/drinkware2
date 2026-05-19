@@ -111,31 +111,59 @@ export default function HistorialEntregasClient() {
       try {
         setLoading(true);
 
-        const [historialResponse, entregasResponse] = await Promise.all([
-          fetch("/api/historial_entrega", { cache: "no-store" }),
-          fetch("/api/entrega", { cache: "no-store" }),
-        ]);
-
-        const [historialJson, entregasJson] = await Promise.all([
-          historialResponse.json(),
-          entregasResponse.json(),
-        ]);
-
-        if (!historialResponse.ok || !historialJson?.ok) {
-          throw new Error(historialJson?.error ?? `HTTP ${historialResponse.status}`);
+        // Obtener usuario activo
+        const usuarioEstadoRes = await fetch("/api/usuarioEstado", { cache: "no-store" });
+        const usuarioEstadoJson = await usuarioEstadoRes.json();
+        if (!usuarioEstadoRes.ok || !usuarioEstadoJson?.ok) {
+          throw new Error(usuarioEstadoJson?.error ?? `HTTP ${usuarioEstadoRes.status}`);
         }
 
-        if (!entregasResponse.ok || !entregasJson?.ok) {
-          throw new Error(entregasJson?.error ?? `HTTP ${entregasResponse.status}`);
+        const user = usuarioEstadoJson.user ?? null;
+        if (!user || !user.idusuario) {
+          // Usuario no autenticado o no activo -> no mostrar historial
+          if (!cancelled) setHistorialEntregas([]);
+          return;
         }
 
-        const entregasMap = new Map<number, Entrega>(
-          (entregasJson.data as Entrega[]).map((entrega) => [entrega.idEntrega, entrega])
-        );
+        // Obtener domiciliarios y buscar el que corresponde al usuario activo
+        const domiciliariosRes = await fetch("/api/domiciliario", { cache: "no-store" });
+        const domiciliariosJson = await domiciliariosRes.json();
+        if (!domiciliariosRes.ok || !domiciliariosJson?.ok) {
+          throw new Error(domiciliariosJson?.error ?? `HTTP ${domiciliariosRes.status}`);
+        }
 
-        const historialConEntrega = (historialJson.data as HistorialEntrega[]).map((historial) => ({
-          ...historial,
-          entrega: entregasMap.get(historial.idEntrega) ?? null,
+        const domiciliarios: Array<{ idDomiciliario: number; idUsuario: number }> = domiciliariosJson.data ?? [];
+        const domiciliario = domiciliarios.find((d) => Number(d.idUsuario) === Number(user.idusuario));
+        if (!domiciliario) {
+          if (!cancelled) setHistorialEntregas([]);
+          return;
+        }
+
+        // Obtener solo entregas y filtrar por idDomiciliario
+        const entregasRes = await fetch("/api/entrega", { cache: "no-store" });
+        const entregasJson = await entregasRes.json();
+        if (!entregasRes.ok || !entregasJson?.ok) {
+          throw new Error(entregasJson?.error ?? `HTTP ${entregasRes.status}`);
+        }
+
+        const entregas: Entrega[] = (entregasJson.data ?? []) as Entrega[];
+        const entregasFiltradas = entregas
+          .filter((e) => e.idDomiciliario !== null && Number(e.idDomiciliario) === Number(domiciliario.idDomiciliario))
+          .sort((a, b) => {
+            const ta = a.fechaAsignacion ? Date.parse(a.fechaAsignacion) : 0;
+            const tb = b.fechaAsignacion ? Date.parse(b.fechaAsignacion) : 0;
+            return tb - ta;
+          });
+
+        // Construir un historial simple a partir de entregas (sin historial_entrega)
+        const historialConEntrega: HistorialConEntrega[] = entregasFiltradas.map((entrega, idx) => ({
+          idHistorial: idx + 1,
+          idEntrega: entrega.idEntrega,
+          estadoAnterior: null,
+          estadoNuevo: entrega.estadoEntrega ?? "",
+          fechaCambio: entrega.fechaAsignacion ?? entrega.fechaSalida ?? entrega.fechaEntrega ?? new Date().toISOString(),
+          comentario: entrega.observacion ?? null,
+          entrega,
         }));
 
         if (!cancelled) {
