@@ -13,7 +13,10 @@ type ProductoListado = {
   descripcion: string | null;
   id_proveedor: number | null;
   pedidos: boolean;
-  estados: string | null; 
+  estados: string | null;
+  iva_porcentaje: number;
+  subida_porcentaje: number;
+  precio_cliente: number;
 };
 
 // GET
@@ -29,13 +32,16 @@ export async function GET() {
         p.imagen,
         p.descripcion,
         p.id_proveedor,
+        p.iva_porcentaje::double precision AS iva_porcentaje,
+        p.subida_porcentaje::double precision AS subida_porcentaje,
         EXISTS (
           SELECT 1
           FROM public.pedidosproveedor AS pp
           WHERE pp.producto_id = p.idproducto
             AND pp.estado = 'Pendiente'
         ) AS pedidos,
-        p.estados
+        p.estados,
+        p.precio_cliente::double precision AS precio_cliente
       FROM public.producto AS p
       ORDER BY p.nombre;
     `);
@@ -93,6 +99,9 @@ export async function POST(req: NextRequest) {
         ? body.estados.trim()
         : 'Disponible';
 
+    const iva_porcentaje = Number(body?.iva_porcentaje ?? 0);
+    const subida_porcentaje = Number(body?.subida_porcentaje ?? 0);
+
     if (!nombre) {
       return NextResponse.json(
         { ok: false, error: 'El nombre es obligatorio' },
@@ -124,10 +133,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!Number.isFinite(iva_porcentaje) || iva_porcentaje < 0) {
+      return NextResponse.json(
+        { ok: false, error: 'El iva_porcentaje debe ser un número válido' },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isFinite(subida_porcentaje) || subida_porcentaje < 0) {
+      return NextResponse.json(
+        { ok: false, error: 'La subida_porcentaje debe ser un número válido' },
+        { status: 400 }
+      );
+    }
+
     const { rows } = await sql<ProductoListado>(`
       INSERT INTO public.producto
-        (nombre, categoria, precio, stock, imagen, descripcion, id_proveedor, estados)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        (nombre, categoria, precio, stock, imagen, descripcion, id_proveedor, estados, iva_porcentaje, subida_porcentaje)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING
         idproducto AS id,
         nombre,
@@ -138,7 +161,10 @@ export async function POST(req: NextRequest) {
         descripcion,
         id_proveedor,
         FALSE AS pedidos,
-        estados;
+        estados,
+        iva_porcentaje::double precision AS iva_porcentaje,
+        subida_porcentaje::double precision AS subida_porcentaje,
+        precio_cliente::double precision AS precio_cliente;
     `, [
       nombre,
       categoria,
@@ -148,6 +174,8 @@ export async function POST(req: NextRequest) {
       descripcion,
       idProveedor,
       estados,
+      iva_porcentaje,
+      subida_porcentaje,
     ]);
 
     return NextResponse.json({ ok: true, data: rows[0] }, { status: 201 });
