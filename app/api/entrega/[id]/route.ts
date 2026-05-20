@@ -80,6 +80,10 @@ type HistorialEntregaRow = {
   idHistorial: number;
 };
 
+type PagoPedidoRow = {
+  metodoPago: string | null;
+};
+
 function normalizeEstadoEntrega(value: string | null): CanonicalEstadoEntrega | null {
   if (!value) return null;
 
@@ -151,6 +155,14 @@ function buildHistorialComentario(
   return `${baseComment} Motivo: ${observacion}`;
 }
 
+function normalizeMetodoPago(value: string | null) {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function isContraentrega(value: string | null) {
+  return normalizeMetodoPago(value) === "contraentrega";
+}
+
 async function getTipoEntregaPedidoByEntregaId(idEntrega: number) {
   const { rows } = await sql<{ tipoEntrega: string | null }>(
     `
@@ -164,6 +176,34 @@ async function getTipoEntregaPedidoByEntregaId(idEntrega: number) {
   );
 
   return rows[0]?.tipoEntrega ?? null;
+}
+
+async function getUltimoMetodoPagoByPedidoId(idPedido: number) {
+  const { rows } = await sql<PagoPedidoRow>(
+    `
+      SELECT metodo_pago AS "metodoPago"
+      FROM public.pago
+      WHERE id_pedido = $1
+      ORDER BY id_pago DESC
+      LIMIT 1;
+    `,
+    [idPedido]
+  );
+
+  return rows[0]?.metodoPago ?? null;
+}
+
+async function restockProductosDePedido(idPedido: number) {
+  await sql(
+    `
+      UPDATE public.producto AS p
+      SET stock = p.stock + dp.cantidad
+      FROM public.detalle_pedido AS dp
+      WHERE dp.id_pedido = $1
+        AND dp.id_producto = p.idproducto;
+    `,
+    [idPedido]
+  );
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -487,6 +527,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     if (!rows[0]) {
       return NextResponse.json({ ok: false, error: "Entrega no encontrada" }, { status: 404 });
+    }
+
+    const shouldRestockContraentrega =
+      estadoEntregaInput === "Cancelado" && currentEstadoEntrega !== "Cancelado";
+
+    if (shouldRestockContraentrega) {
+      const metodoPago = await getUltimoMetodoPagoByPedidoId(Number(rows[0].idPedido));
+
+      if (isContraentrega(metodoPago)) {
+        await restockProductosDePedido(Number(rows[0].idPedido));
+      }
     }
 
     if (
