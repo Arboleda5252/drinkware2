@@ -74,6 +74,33 @@ function formatDate(value: string | null | undefined) {
   }
 }
 
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-10 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+      <svg
+        className="size-8 animate-spin text-white"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="none"
+        />
+        <path
+          className="opacity-90"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
+      </svg>
+    </div>
+  );
+}
+
 function PedidoCard({ entrega }: { entrega: EntregaAsignada }) {
   const normalizedStatus = normalizeStatus(entrega.estadoEntrega);
   const fechaPrincipal =
@@ -249,9 +276,7 @@ export default function DomiciliarioPedidos({ currentUserId }: DomiciliarioPedid
       </div>
 
       {loading ? (
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-8 text-center text-slate-300 shadow-[0_18px_50px_rgba(2,6,23,0.2)]">
-          Cargando pedidos asignados...
-        </div>
+        <LoadingSpinner />
       ) : error ? (
         <div className="rounded-[1.75rem] border border-rose-400/25 bg-rose-500/10 p-6 text-rose-100 shadow-[0_18px_50px_rgba(2,6,23,0.2)]">
           {error}

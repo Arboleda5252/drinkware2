@@ -65,15 +65,23 @@ function getEstadoBadgeClass(value: string | null | undefined) {
   const normalized = normalizeEstado(value);
 
   const styles: Record<string, string> = {
-    asignada: "bg-sky-100 text-sky-900",
-    en_camino: "bg-cyan-100 text-cyan-900",
-    entregado: "bg-emerald-100 text-emerald-900",
-    no_entregado: "bg-rose-100 text-rose-900",
-    cancelado: "bg-slate-200 text-slate-900",
-    pendiente: "bg-amber-100 text-amber-900",
+    asignada: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
+    en_camino: "border border-blue-300/30 bg-blue-400/15 text-blue-100",
+    entregado: "border border-emerald-300/30 bg-emerald-400/15 text-emerald-100",
+    no_entregado: "border border-amber-300/30 bg-amber-400/15 text-amber-100",
+    cancelado: "border border-rose-300/30 bg-rose-400/15 text-rose-100",
+    pendiente: "border border-slate-300/20 bg-slate-400/10 text-slate-100",
   };
 
-  return styles[normalized] ?? "bg-slate-100 text-slate-900";
+  return styles[normalized] ?? "border border-slate-300/20 bg-slate-400/10 text-slate-100";
+}
+
+function getFilterButtonClass(active: boolean) {
+  if (active) {
+    return "border-[#c9a55c]/35 bg-[linear-gradient(135deg,#d2ac67,#9f7b32)] text-slate-950 shadow-[0_14px_34px_rgba(201,165,92,0.24)]";
+  }
+
+  return "border-white/10 bg-white/[0.04] text-slate-200 hover:border-sky-300/25 hover:bg-sky-400/10";
 }
 
 function formatDate(value: string | null) {
@@ -99,6 +107,33 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-12 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+      <svg
+        className="size-8 animate-spin text-white"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="none"
+        />
+        <path
+          className="opacity-90"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export default function HistorialEntregasClient() {
   const [historialEntregas, setHistorialEntregas] = useState<HistorialConEntrega[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,7 +146,6 @@ export default function HistorialEntregasClient() {
       try {
         setLoading(true);
 
-        // Obtener usuario activo
         const usuarioEstadoRes = await fetch("/api/usuarioEstado", { cache: "no-store" });
         const usuarioEstadoJson = await usuarioEstadoRes.json();
         if (!usuarioEstadoRes.ok || !usuarioEstadoJson?.ok) {
@@ -120,12 +154,10 @@ export default function HistorialEntregasClient() {
 
         const user = usuarioEstadoJson.user ?? null;
         if (!user || !user.idusuario) {
-          // Usuario no autenticado o no activo -> no mostrar historial
           if (!cancelled) setHistorialEntregas([]);
           return;
         }
 
-        // Obtener domiciliarios y buscar el que corresponde al usuario activo
         const domiciliariosRes = await fetch("/api/domiciliario", { cache: "no-store" });
         const domiciliariosJson = await domiciliariosRes.json();
         if (!domiciliariosRes.ok || !domiciliariosJson?.ok) {
@@ -139,7 +171,6 @@ export default function HistorialEntregasClient() {
           return;
         }
 
-        // Obtener solo entregas y filtrar por idDomiciliario
         const entregasRes = await fetch("/api/entrega", { cache: "no-store" });
         const entregasJson = await entregasRes.json();
         if (!entregasRes.ok || !entregasJson?.ok) {
@@ -155,13 +186,16 @@ export default function HistorialEntregasClient() {
             return tb - ta;
           });
 
-        // Construir un historial simple a partir de entregas (sin historial_entrega)
         const historialConEntrega: HistorialConEntrega[] = entregasFiltradas.map((entrega, idx) => ({
           idHistorial: idx + 1,
           idEntrega: entrega.idEntrega,
           estadoAnterior: null,
           estadoNuevo: entrega.estadoEntrega ?? "",
-          fechaCambio: entrega.fechaAsignacion ?? entrega.fechaSalida ?? entrega.fechaEntrega ?? new Date().toISOString(),
+          fechaCambio:
+            entrega.fechaAsignacion ??
+            entrega.fechaSalida ??
+            entrega.fechaEntrega ??
+            new Date().toISOString(),
           comentario: entrega.observacion ?? null,
           entrega,
         }));
@@ -196,28 +230,76 @@ export default function HistorialEntregasClient() {
     );
   }, [estadoFiltro, historialEntregas]);
 
+  const resumen = useMemo(() => {
+    const counters = {
+      total: historialEntregas.length,
+      entregadas: 0,
+      enCamino: 0,
+      incidencias: 0,
+    };
+
+    for (const item of historialEntregas) {
+      const estado = normalizeEstado(item.estadoNuevo);
+
+      if (estado === "entregado") counters.entregadas += 1;
+      if (estado === "en_camino") counters.enCamino += 1;
+      if (estado === "no_entregado" || estado === "cancelado") counters.incidencias += 1;
+    }
+
+    return counters;
+  }, [historialEntregas]);
+
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="mb-8 rounded-3xl border border-slate-200 bg-white/90 p-8 shadow-sm shadow-slate-200/50">
-        <h1 className="text-3xl font-semibold text-slate-900">Historial de Entregas</h1>
-        <p className="mt-3 text-sm text-slate-600">
-          Aqui veras el historial de cambios de estado de cada pedido asignado al flujo de entregas.
-        </p>
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
+      <header className="relative mb-8 overflow-hidden rounded-[2rem] border border-[#c9a55c]/20 bg-[linear-gradient(135deg,rgba(2,6,23,0.96),rgba(15,23,42,0.94),rgba(30,41,59,0.92))] p-8 shadow-[0_28px_80px_rgba(2,6,23,0.45)] sm:p-10">
+        <div className="absolute -left-20 top-0 h-56 w-56 rounded-full bg-[#c9a55c]/16 blur-3xl" />
+        <div className="absolute right-0 top-10 h-64 w-64 rounded-full bg-sky-400/14 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_22%),radial-gradient(circle_at_80%_30%,rgba(56,189,248,0.18),transparent_24%)]" />
+
+        <div className="relative z-10">
+          <h1 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-5xl">
+            Historial de entregas
+          </h1>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
+            Aqui veras el historial de cambios de estado de cada pedido asignado al flujo de entregas.
+          </p>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-[1.5rem] border border-[#c9a55c]/20 bg-[#c9a55c]/[0.08] p-5 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-[0.28em] text-[#e1c98f]">Registros</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{resumen.total}</p>
+              <p className="mt-2 text-sm text-slate-300">Movimientos visibles</p>
+            </div>
+            <div className="rounded-[1.5rem] border border-sky-300/20 bg-sky-400/[0.08] p-5 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-[0.28em] text-sky-200">En ruta</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{resumen.enCamino}</p>
+              <p className="mt-2 text-sm text-slate-300">Entregas activas</p>
+            </div>
+            <div className="rounded-[1.5rem] border border-emerald-300/20 bg-emerald-400/[0.08] p-5 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-[0.28em] text-emerald-200">Completadas</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{resumen.entregadas}</p>
+              <p className="mt-2 text-sm text-slate-300">Pedidos entregados</p>
+            </div>
+            <div className="rounded-[1.5rem] border border-amber-300/20 bg-amber-400/[0.08] p-5 backdrop-blur-sm">
+              <p className="text-xs uppercase tracking-[0.28em] text-amber-200">Incidencias</p>
+              <p className="mt-3 text-3xl font-semibold text-white">{resumen.incidencias}</p>
+              <p className="mt-2 text-sm text-slate-300">No entregados o cancelados</p>
+            </div>
+          </div>
+        </div>
       </header>
 
-      <div className="mb-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 font-semibold text-slate-900">Filtrar por estado registrado</h2>
-        <div className="flex flex-wrap gap-2">
+      <div className="mb-8 rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+        <h2 className="mb-4 text-lg font-semibold text-white">Filtrar por estado registrado</h2>
+        <div className="flex flex-wrap gap-3">
           {estadoFiltroOptions.map((estado) => (
             <button
               key={estado}
               type="button"
               onClick={() => setEstadoFiltro(estado)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition ${getFilterButtonClass(
                 estadoFiltro === estado
-                  ? "bg-sky-500 text-white"
-                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
+              )}`}
             >
               {estado === "todos" ? "Todos" : getEstadoLabel(estado)}
             </button>
@@ -226,16 +308,11 @@ export default function HistorialEntregasClient() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-sky-500" />
-            <p className="text-slate-600">Cargando historial...</p>
-          </div>
-        </div>
+        <LoadingSpinner />
       ) : historialFiltrado.length === 0 ? (
-        <div className="rounded-3xl border border-slate-200 bg-white/90 p-12 text-center shadow-sm shadow-slate-200/50">
-          <p className="text-lg text-slate-600">No hay movimientos en esta categoria.</p>
-          <p className="mt-2 text-sm text-slate-500">
+        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-12 text-center shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+          <p className="text-lg text-slate-200">No hay movimientos en esta categoria.</p>
+          <p className="mt-2 text-sm text-slate-400">
             Los cambios de estado de las entregas apareceran aqui.
           </p>
         </div>
@@ -244,17 +321,17 @@ export default function HistorialEntregasClient() {
           {historialFiltrado.map((historial) => (
             <article
               key={historial.idHistorial}
-              className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50"
+              className="rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.88),rgba(2,6,23,0.92))] p-6 shadow-[0_20px_60px_rgba(2,6,23,0.35)]"
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-sm text-slate-500">
-                    Pedido #{historial.entrega?.idPedido ?? "-"} | Entrega #{historial.idEntrega}
+                  <p className="text-sm text-slate-400">
+                    Num. Referencia Pedido #{historial.entrega?.idPedido ?? "-"}
                   </p>
-                  <h2 className="mt-1 text-lg font-semibold text-slate-900">
+                  <h2 className="mt-1 text-lg font-semibold text-white">
                     {historial.entrega?.nombreRecibe || "Entrega registrada"}
                   </h2>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="mt-1 text-sm text-slate-300">
                     {historial.entrega?.direccionEntrega
                       ? `${historial.entrega.direccionEntrega}, ${historial.entrega.ciudad ?? ""}`
                       : "Direccion de entrega no disponible"}
@@ -263,11 +340,11 @@ export default function HistorialEntregasClient() {
 
                 <div className="flex flex-wrap items-center gap-2">
                   {historial.estadoAnterior ? (
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-slate-300">
                       {getEstadoLabel(historial.estadoAnterior)}
                     </span>
                   ) : null}
-                  <span className="text-sm text-slate-400">→</span>
+                  <span className="text-sm text-slate-500">{"->"}</span>
                   <span
                     className={`rounded-full px-3 py-1 text-xs font-semibold ${getEstadoBadgeClass(
                       historial.estadoNuevo
@@ -278,49 +355,11 @@ export default function HistorialEntregasClient() {
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-4 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <p className="font-medium text-slate-700">Fecha del cambio</p>
-                  <p>{formatDate(historial.fechaCambio)}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-700">Estado actual de entrega</p>
-                  <p>{getEstadoLabel(historial.entrega?.estadoEntrega)}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-700">Fecha de salida</p>
-                  <p>{formatDate(historial.entrega?.fechaSalida ?? null)}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-700">Fecha de entrega</p>
-                  <p>{formatDate(historial.entrega?.fechaEntrega ?? null)}</p>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 text-sm text-slate-600 sm:grid-cols-2">
-                <div>
-                  <p className="font-medium text-slate-700">Comentario del historial</p>
-                  <p>{historial.comentario || "Sin comentario"}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-700">Observacion de la entrega</p>
-                  <p>{historial.entrega?.observacion || "Sin observacion"}</p>
-                </div>
-              </div>
-
-              <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap gap-6">
-                  <div>
-                    <p className="font-medium text-slate-700">Costo de envio</p>
-                    <p>{formatCurrency(Number(historial.entrega?.costoEnvio ?? 0))}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-700">Fecha de asignacion</p>
-                    <p>{formatDate(historial.entrega?.fechaAsignacion ?? null)}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-700">Fecha de cancelacion</p>
-                    <p>{formatDate(historial.entrega?.fechaCancelado ?? null)}</p>
+              <div className="mt-5 flex flex-col gap-4 border-t border-white/10 pt-4 text-sm text-slate-300 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-4">
+                  <div className="rounded-[1rem] border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <p className="font-medium text-slate-100">Fecha de asignacion</p>
+                    <p className="mt-1">{formatDate(historial.entrega?.fechaAsignacion ?? null)}</p>
                   </div>
                 </div>
 
@@ -330,7 +369,7 @@ export default function HistorialEntregasClient() {
                     if (!historial.entrega?.idPedido) return;
                     window.location.href = `/user/domiciliario/pedidos/${historial.entrega.idPedido}`;
                   }}
-                  className="rounded-2xl bg-sky-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-600"
+                  className="rounded-full border border-sky-200/30 bg-[linear-gradient(135deg,#38bdf8,#1d4ed8)] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(37,99,235,0.28)] transition hover:brightness-110"
                 >
                   Ver pedido
                 </button>
@@ -339,16 +378,6 @@ export default function HistorialEntregasClient() {
           ))}
         </div>
       )}
-
-      {/* 
-        Camara, captura de foto y evidencia fotografica deshabilitadas temporalmente.
-        Este modulo quedo fuera del flujo actual porque la API de historial_entrega ya no
-        trabaja con foto_evidencia ni con el modal de camara.
-        Cuando se retome este frente, revisar juntos:
-        1. Dónde debe persistirse la foto.
-        2. Si la evidencia pertenece a entrega o a historial_entrega.
-        3. Cómo versionar multiples evidencias por cambio de estado.
-      */}
     </main>
   );
 }

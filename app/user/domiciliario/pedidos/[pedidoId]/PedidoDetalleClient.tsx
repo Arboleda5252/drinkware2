@@ -133,25 +133,6 @@ const getStatusLabel = (value: string | null) => {
   return labels[normalized] ?? (value ?? "Pendiente");
 };
 
-const getStatusClass = (value: string | null) => {
-  const normalized = normalizeStatus(value);
-
-  const styles: Record<string, string> = {
-    pendiente: "border border-amber-300/30 bg-amber-400/15 text-amber-100",
-    asignada: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
-    asignado: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
-    en_camino: "border border-blue-300/30 bg-blue-400/15 text-blue-100",
-    entregado: "border border-emerald-300/30 bg-emerald-400/15 text-emerald-100",
-    no_entregado: "border border-rose-300/30 bg-rose-400/15 text-rose-100",
-    cancelado: "border border-slate-400/30 bg-slate-400/15 text-slate-100",
-    pagado: "border border-emerald-300/30 bg-emerald-400/15 text-emerald-100",
-    rechazado: "border border-rose-300/30 bg-rose-400/15 text-rose-100",
-    reembolsado: "border border-violet-300/30 bg-violet-400/15 text-violet-100",
-  };
-
-  return styles[normalized] ?? "border border-slate-400/20 bg-slate-400/10 text-slate-100";
-};
-
 const isContraentrega = (value: string | null) =>
   (value ?? "").trim().toLowerCase().replace(/\s+/g, "") === "contraentrega";
 
@@ -182,6 +163,33 @@ function InfoCard({
     <div className={`rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4 ${className}`}>
       <p className="text-xs uppercase tracking-[0.24em] text-slate-400">{label}</p>
       <p className="mt-2 text-base font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.04] p-12 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+      <svg
+        className="size-8 animate-spin text-white"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="none"
+        />
+        <path
+          className="opacity-90"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
+      </svg>
     </div>
   );
 }
@@ -294,9 +302,7 @@ export default function PedidoDetalleClient({ pedidoId, currentUserId }: Props) 
   if (loading) {
     return (
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center text-slate-300 shadow-[0_18px_50px_rgba(2,6,23,0.2)]">
-          Cargando detalle del pedido...
-        </div>
+        <LoadingSpinner />
       </main>
     );
   }

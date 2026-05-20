@@ -64,6 +64,26 @@ const getDisplayLabel = (status: string | null) => {
   return labels[canonical] ?? canonical;
 };
 
+const getActionButtonClass = (nextState: EstadoEntrega) => {
+  if (nextState === "Entregado") {
+    return "border-emerald-200/30 bg-[linear-gradient(135deg,#d7b36a,#9f7b32)] text-slate-950 shadow-[0_18px_40px_rgba(201,165,92,0.22)] hover:brightness-110 hover:shadow-[0_24px_50px_rgba(201,165,92,0.3)]";
+  }
+
+  if (nextState === "En_camino") {
+    return "border-sky-200/30 bg-[linear-gradient(135deg,#38bdf8,#1d4ed8)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.28)] hover:brightness-110 hover:shadow-[0_24px_50px_rgba(37,99,235,0.38)]";
+  }
+
+  if (nextState === "No_entregado") {
+    return "border-amber-200/25 bg-[linear-gradient(135deg,#f59e0b,#b45309)] text-white shadow-[0_18px_40px_rgba(180,83,9,0.24)] hover:brightness-110";
+  }
+
+  if (nextState === "Cancelado") {
+    return "border-rose-200/25 bg-[linear-gradient(135deg,#fb7185,#be123c)] text-white shadow-[0_18px_40px_rgba(190,24,93,0.24)] hover:brightness-110";
+  }
+
+  return "border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.86))] text-white hover:border-sky-300/25 hover:bg-sky-400/10";
+};
+
 const isEstadoPagado = (value: string | null | undefined) =>
   normalizeStatus(value) === "pagado";
 
@@ -270,9 +290,11 @@ export default function PedidoEstadoActions({
                 type="button"
                 onClick={() => openStatusChange(nextState)}
                 disabled={loading}
-                className="rounded-[1.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.86))] px-4 py-3 text-left text-sm font-semibold text-white transition hover:border-sky-300/25 hover:bg-sky-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`rounded-[1.35rem] border px-5 py-4 text-center text-sm font-semibold transition duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${getActionButtonClass(nextState)}`}
               >
-                Cambiar a {getDisplayLabel(nextState)}
+                <span className="mt-1 block text-base font-semibold">
+                  {getDisplayLabel(nextState)}
+                </span>
               </button>
             ))
           ) : (
