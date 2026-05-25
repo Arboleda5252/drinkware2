@@ -15,3 +15,11 @@ export type FeedbackState = {
   type: "success" | "error";
   message: string;
 };
+
+export type DomiciliarioOption = {
+  idDomiciliario: number;
+  idUsuario: number;
+  nombreCompleto: string;
+  estadoLaboral: string;
+  disponibilidadManual: string;
+};

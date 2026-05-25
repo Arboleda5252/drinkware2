@@ -7,7 +7,8 @@ type ProductoListado = {
   id: number;
   nombre: string;
   categoria: string | null;
-  precio: number;        
+  precio: number;
+  precio_base: number;
   stock: number;
   imagen: string | null;
   descripcion: string | null;
@@ -27,7 +28,8 @@ export async function GET() {
         p.idproducto AS id,
         p.nombre,
         p.categoria,
-        p.precio::double precision AS precio, -- CAST para obtener number en pg
+        p.precio_cliente::double precision AS precio,
+        p.precio::double precision AS precio_base,
         p.stock::int AS stock,
         p.imagen,
         p.descripcion,
@@ -59,9 +61,9 @@ export async function GET() {
 // POST
 export async function POST(req: NextRequest) {
   try {
-    let body: any;
+    let body: Record<string, unknown>;
     try {
-      body = await req.json();
+      body = (await req.json()) as Record<string, unknown>;
     } catch {
       return NextResponse.json(
         { ok: false, error: 'Cuerpo de la solicitud inválido' },
@@ -155,7 +157,8 @@ export async function POST(req: NextRequest) {
         idproducto AS id,
         nombre,
         categoria,
-        precio::double precision AS precio,
+        precio_cliente::double precision AS precio,
+        precio::double precision AS precio_base,
         stock::int AS stock,
         imagen,
         descripcion,
@@ -183,6 +186,75 @@ export async function POST(req: NextRequest) {
     console.error(err);
     return NextResponse.json(
       { ok: false, error: 'Error al crear el producto' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+
+    const accion = typeof body?.accion === "string" ? body.accion.toLowerCase() : "";
+    if (accion !== "actualizar_suba_categoria") {
+      return NextResponse.json({ ok: false, error: "Accion invalida" }, { status: 400 });
+    }
+
+    const categoria =
+      typeof body?.categoria === "string" && body.categoria.trim().length > 0
+        ? body.categoria.trim()
+        : null;
+    const subidaPorcentaje = Number(body?.subida_porcentaje ?? body?.suba);
+
+    if (!categoria) {
+      return NextResponse.json(
+        { ok: false, error: "La categoria es obligatoria" },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isFinite(subidaPorcentaje) || subidaPorcentaje < 0) {
+      return NextResponse.json(
+        { ok: false, error: "La SUBA debe ser un numero valido" },
+        { status: 400 }
+      );
+    }
+
+    const { rows } = await sql<ProductoListado>(
+      `
+        UPDATE public.producto
+        SET subida_porcentaje = $2
+        WHERE categoria = $1
+        RETURNING
+          idproducto AS id,
+          nombre,
+          categoria,
+          precio_cliente::double precision AS precio,
+          precio::double precision AS precio_base,
+          stock::int AS stock,
+          imagen,
+          descripcion,
+          id_proveedor,
+          iva_porcentaje::double precision AS iva_porcentaje,
+          subida_porcentaje::double precision AS subida_porcentaje,
+          EXISTS (
+            SELECT 1
+            FROM public.pedidosproveedor AS pp
+            WHERE pp.producto_id = public.producto.idproducto
+              AND pp.estado = 'Pendiente'
+          ) AS pedidos,
+          estados,
+          precio_cliente::double precision AS precio_cliente
+        ;
+      `,
+      [categoria, subidaPorcentaje]
+    );
+
+    return NextResponse.json({ ok: true, data: rows, updated: rows.length });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json(
+      { ok: false, error: 'Error al actualizar la SUBA por categoria' },
       { status: 500 }
     );
   }

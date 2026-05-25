@@ -33,6 +33,9 @@ export default function Page() {
   const [preview, setPreview] = React.useState<string | null>(null);
   const archivoRef = React.useRef<HTMLInputElement | null>(null);
 
+  const getErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error ? error.message : fallback;
+
   const actualizarCampo = (campo: keyof typeof form) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -91,7 +94,7 @@ export default function Page() {
       return;
     }
     if (!Number.isFinite(precioNumero) || precioNumero < 0) {
-      setError("El precio debe ser un número válido.");
+      setError("El precio base debe ser un numero valido.");
       return;
     }
 
@@ -130,8 +133,8 @@ export default function Page() {
       if (archivoRef.current) {
         archivoRef.current.value = "";
       }
-    } catch (err: any) {
-      setError(err?.message ?? "No se pudo crear el producto.");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "No se pudo crear el producto."));
     } finally {
       setEnviando(false);
     }
@@ -179,7 +182,7 @@ export default function Page() {
           </label>
 
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-gray-700">Precio</span>
+            <span className="text-sm font-medium text-gray-700">Precio base</span>
             <input
               type="number"
               min="0"

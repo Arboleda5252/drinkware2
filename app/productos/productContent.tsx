@@ -41,6 +41,11 @@ type UsuarioActivo = {
   nombre: string;
 };
 
+type DetallePedidoVenta = {
+  idProducto: number;
+  cantidad: number;
+};
+
 const currencyFormatter = new Intl.NumberFormat("es-CO");
 
 export default function Page() {
@@ -76,12 +81,38 @@ export default function Page() {
   const [usuarioActivo, setUsuarioActivo] = React.useState<UsuarioActivo | null>(null);
   const [sesionCargada, setSesionCargada] = React.useState(false);
   const [pedidoActivoId, setPedidoActivoId] = React.useState<number | null>(null);
+  const [ventasPorProducto, setVentasPorProducto] = React.useState<Record<number, number>>({});
   const actualizarStockEnEstado = React.useCallback((productoId: number, nuevoStock: number) => {
     setProductos((prev) =>
       prev.map((producto) => (producto.id === productoId ? { ...producto, stock: nuevoStock } : producto))
     );
     setModalProducto((prev) => (prev?.id === productoId ? { ...prev, stock: nuevoStock } : prev));
   }, []);
+
+  const actualizarCantidadSeleccionada = React.useCallback(
+    (productoId: number, valor: string | number, stockDisponible: number) => {
+      if (valor === "") {
+        setCantidadesSeleccionadas((prev) => ({
+          ...prev,
+          [productoId]: null,
+        }));
+        return;
+      }
+
+      const numero = typeof valor === "number" ? valor : Number(valor);
+      if (Number.isNaN(numero)) {
+        return;
+      }
+
+      const minimo = Math.max(1, Math.trunc(numero));
+      const limite = Math.min(minimo, Math.max(stockDisponible, 1));
+      setCantidadesSeleccionadas((prev) => ({
+        ...prev,
+        [productoId]: limite,
+      }));
+    },
+    []
+  );
 
   // ------------------------
   // CARGA DE PRODUCTOS
@@ -117,6 +148,44 @@ export default function Page() {
         if (!cancelado) setCargando(false);
       }
     })();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/detalle_pedido", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!json?.ok || !Array.isArray(json.data)) {
+          throw new Error(json?.error ?? "Respuesta invalida");
+        }
+
+        if (!cancelado) {
+          const acumulado = (json.data as DetallePedidoVenta[]).reduce<Record<number, number>>(
+            (acc, detalle) => {
+              const idProducto = Number(detalle.idProducto);
+              const cantidad = Number(detalle.cantidad);
+              if (!Number.isInteger(idProducto) || !Number.isFinite(cantidad)) {
+                return acc;
+              }
+              acc[idProducto] = (acc[idProducto] ?? 0) + cantidad;
+              return acc;
+            },
+            {}
+          );
+          setVentasPorProducto(acumulado);
+        }
+      } catch (e) {
+        if (!cancelado) {
+          console.error("[detalle_pedido] no se pudieron cargar las ventas", e);
+        }
+      }
+    })();
+
     return () => {
       cancelado = true;
     };
@@ -220,6 +289,36 @@ export default function Page() {
     const inicio = (pagina - 1) * productosPorPagina;
     return productosFiltrados.slice(inicio, inicio + productosPorPagina);
   }, [productosFiltrados, pagina]);
+
+  const productosRecomendadosModal = React.useMemo(() => {
+    if (!modalProducto?.categoria) {
+      return [];
+    }
+
+    const categoriaActual = modalProducto.categoria.trim().toLowerCase();
+    const relacionados = productos
+      .filter(
+        (producto) =>
+          producto.id !== modalProducto.id &&
+          producto.stock > 0 &&
+          producto.categoria?.trim().toLowerCase() === categoriaActual
+      )
+      .sort((a, b) => {
+        const ventasA = ventasPorProducto[a.id] ?? 0;
+        const ventasB = ventasPorProducto[b.id] ?? 0;
+        if (ventasA !== ventasB) return ventasB - ventasA;
+        return a.nombre.localeCompare(b.nombre);
+      })
+      .slice(0, 3);
+
+    return relacionados.length === 3 ? relacionados : [];
+  }, [modalProducto, productos, ventasPorProducto]);
+
+  const cantidadModalActual = modalProducto
+    ? modalProducto.stock <= 0
+      ? 0
+      : cantidadesSeleccionadas[modalProducto.id] ?? 1
+    : 1;
 
   // =========================================================
   // MANEJO DE CARRITO
@@ -790,26 +889,9 @@ export default function Page() {
                       value={
                         sinStock ? "" : cantidadSeleccionada?.toString() ?? ""
                       }
-                      onChange={(e) => {
-                        const valor = e.target.value;
-                        if (valor === "") {
-                          setCantidadesSeleccionadas((prev) => ({
-                            ...prev,
-                            [producto.id]: null,
-                          }));
-                          return;
-                        }
-                        const numero = Number(valor);
-                        if (Number.isNaN(numero)) {
-                          return;
-                        }
-                        const minimo = Math.max(1, numero);
-                        const limite = Math.min(minimo, Math.max(stockDisponible, 1));
-                        setCantidadesSeleccionadas((prev) => ({
-                          ...prev,
-                          [producto.id]: limite,
-                        }));
-                      }}
+                      onChange={(e) =>
+                        actualizarCantidadSeleccionada(producto.id, e.target.value, stockDisponible)
+                      }
                       disabled={sinStock || !puedeAgregarAlCarrito}
                       className={`mt-2 w-full rounded-xl border border-white/10 px-3 py-2 text-left text-sm text-white shadow-sm outline-none focus:border-sky-300/40 focus:ring-2 focus:ring-sky-300/30 ${sinStock || !puedeAgregarAlCarrito ? "cursor-not-allowed bg-white/5" : "bg-white/10"}`}
                     />
@@ -878,58 +960,186 @@ export default function Page() {
       {/* MODAL DETALLES */}
       {/* ========================================================= */}
       {modalProducto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4">
-          <div className="relative w-full max-w-2xl rounded-3xl border border-gray-200 bg-white p-6 shadow-xl">
-            {/* Cerrar */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
+          <div className="relative w-full max-w-5xl overflow-hidden rounded-[2rem] border border-amber-400/20 bg-[#0b0b0d] shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.12),_transparent_28%)]" />
             <button
               onClick={() => setModalProducto(null)}
-              className="absolute right-5 top-5 text-slate-500 transition hover:text-slate-900"
+              className="absolute right-5 top-5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition hover:border-amber-300/40 hover:bg-white/10 hover:text-amber-200"
             >
               <FaTimes size={22} />
             </button>
 
-            <div className="flex flex-col items-center text-center">
-              <Image
-                src={modalProducto.imagen || "/no-image.png"}
-                width={300}
-                height={300}
-                alt={modalProducto.nombre}
-                className="mb-6 rounded-2xl bg-slate-50 object-contain"
-              />
+            <div className="relative grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="flex items-center justify-center border-b border-amber-400/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.01))] p-6 sm:p-8 lg:min-h-[560px] lg:border-b-0 lg:border-r">
+                <div className="w-full max-w-md">
+                  <div className="relative overflow-hidden rounded-[1.75rem] border border-amber-300/20 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.14),_rgba(15,23,42,0.85)_58%)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                    <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/70 to-transparent" />
+                    <Image
+                      src={modalProducto.imagen || "/no-image.png"}
+                      width={420}
+                      height={420}
+                      alt={modalProducto.nombre}
+                      className="mx-auto aspect-square w-full rounded-[1.4rem] object-contain"
+                    />
+                  </div>
 
-              <h2 className="mb-3 text-3xl font-bold tracking-tight text-slate-900">
-                {modalProducto.nombre}
-              </h2>
+                  {productosRecomendadosModal.length > 0 ? (
+                    <div className="mt-6">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/70">
+                        Recomendaciones de la misma categoria
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                        {productosRecomendadosModal.map((producto) => (
+                          <button
+                            key={producto.id}
+                            type="button"
+                            onClick={() => setModalProducto(producto)}
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition hover:border-amber-300/30 hover:bg-white/[0.05]"
+                          >
+                            <div className="mb-3 flex h-24 items-center justify-center rounded-xl bg-black/30">
+                              <Image
+                                src={producto.imagen || "/no-image.png"}
+                                width={90}
+                                height={90}
+                                alt={producto.nombre}
+                                className="h-20 w-auto object-contain"
+                              />
+                            </div>
+                            <p className="line-clamp-2 min-h-10 text-sm font-semibold text-white">
+                              {producto.nombre}
+                            </p>
+                            <p className="mt-2 text-sm font-medium text-amber-300">
+                              ${currencyFormatter.format(producto.precio)}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
 
-              <p className="mb-3 text-3xl font-bold tracking-tight text-slate-900">
-                ${currencyFormatter.format(modalProducto.precio)}
-              </p>
+              <div className="flex flex-col justify-center p-6 sm:p-8 lg:p-10">
+                <span className="mb-4 inline-flex w-fit rounded-full border border-amber-300/25 bg-amber-300/10 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-amber-200">
+                  Seleccion premium
+                </span>
 
-              <p className="text-lg text-gray-700 mb-2">
-                <strong>Categoría:</strong> {modalProducto.categoria}
-              </p>
+                <h2 className="mb-3 max-w-xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                  {modalProducto.nombre}
+                </h2>
 
-              <p className="text-lg text-gray-700 mb-2">
-                <strong>Stock:</strong> {modalProducto.stock}
-              </p>
+                <p className="mb-6 text-3xl font-bold tracking-tight text-amber-300 sm:text-4xl">
+                  ${currencyFormatter.format(modalProducto.precio)}
+                </p>
 
-              <p className="text-lg text-gray-700 mb-4">
-                <strong>Descripción:</strong> {modalProducto.descripcion}
-              </p>
+                <div className="mb-6 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/70">
+                      Categoria
+                    </p>
+                    <p className="text-base font-medium text-slate-100">
+                      {modalProducto.categoria}
+                    </p>
+                  </div>
 
-              <button
-                onClick={async () => {
-                  const cantidadModal = cantidadesSeleccionadas[modalProducto.id] ?? 1;
-                  const agregado = await agregarAlCarrito(modalProducto, cantidadModal);
-                  if (agregado) {
-                    setModalProducto(null);
-                  }
-                }}
-                disabled={modalProducto.stock <= 0 || !puedeAgregarAlCarrito}
-                className="mt-6 w-full rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-gray-300"
-              >
-                Agregar al carrito
-              </button>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/70">
+                      Stock
+                    </p>
+                    <p className="text-base font-medium text-slate-100">
+                      {modalProducto.stock > 0 ? `${modalProducto.stock} disponibles` : "Agotado"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-6 rounded-[1.6rem] border border-amber-400/10 bg-white/[0.03] p-5">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/70">
+                    Descripcion
+                  </p>
+                  <p className="text-base leading-7 text-slate-300">
+                    {modalProducto.descripcion}
+                  </p>
+                </div>
+
+                <div className="mb-6 rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-5">
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/70">
+                      Cantidad
+                    </p>
+                    <p className="text-sm text-slate-400">
+                      Subtotal:{" "}
+                      <span className="font-semibold text-white">
+                        ${currencyFormatter.format(cantidadModalActual * modalProducto.precio)}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        actualizarCantidadSeleccionada(
+                          modalProducto.id,
+                          Math.max(1, cantidadModalActual - 1),
+                          modalProducto.stock
+                        )
+                      }
+                      disabled={modalProducto.stock <= 0 || !puedeAgregarAlCarrito}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-lg text-white transition hover:border-amber-300/40 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      -
+                    </button>
+
+                    <input
+                      type="number"
+                      min="1"
+                      max={Math.max(modalProducto.stock, 1)}
+                      value={
+                        modalProducto.stock <= 0
+                          ? ""
+                          : cantidadModalActual.toString()
+                      }
+                      onChange={(e) =>
+                        actualizarCantidadSeleccionada(modalProducto.id, e.target.value, modalProducto.stock)
+                      }
+                      disabled={modalProducto.stock <= 0 || !puedeAgregarAlCarrito}
+                      className="h-11 flex-1 rounded-xl border border-white/10 bg-black/40 px-4 text-center text-base font-semibold text-white outline-none transition focus:border-amber-300/40 focus:ring-2 focus:ring-amber-300/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        actualizarCantidadSeleccionada(
+                          modalProducto.id,
+                          Math.min(
+                            modalProducto.stock,
+                            cantidadModalActual + 1
+                          ),
+                          modalProducto.stock
+                        )
+                      }
+                      disabled={modalProducto.stock <= 0 || !puedeAgregarAlCarrito}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-lg text-white transition hover:border-amber-300/40 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={async () => {
+                    const agregado = await agregarAlCarrito(modalProducto, cantidadModalActual || 1);
+                    if (agregado) {
+                      setModalProducto(null);
+                    }
+                  }}
+                  disabled={modalProducto.stock <= 0 || !puedeAgregarAlCarrito}
+                  className="w-full rounded-2xl border border-amber-300/25 bg-[#111215] px-6 py-4 text-sm font-semibold uppercase tracking-[0.2em] text-amber-200 transition duration-300 hover:border-amber-300/50 hover:bg-[#1a1c20] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  Agregar al carrito
+                </button>
+              </div>
             </div>
           </div>
         </div>

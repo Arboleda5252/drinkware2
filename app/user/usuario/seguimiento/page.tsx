@@ -397,6 +397,19 @@ export default function Page() {
     return observacionesHistorial.get(Number(entrega.idEntrega)) ?? null;
   };
 
+  const formatearEstadoEntrega = (estado: string | null | undefined) => {
+    if (!estado) {
+      return "Pendiente";
+    }
+
+    const normalizado = estado.replaceAll("_", " ").trim();
+    if (!normalizado) {
+      return "Pendiente";
+    }
+
+    return normalizado.charAt(0).toUpperCase() + normalizado.slice(1).toLowerCase();
+  };
+
   const renderPedido = (
     { pedido, detalles, pago, entrega }: PedidoConDetalle,
     seccionKey: "pendientes" | "entregados" | "cancelados"
@@ -415,7 +428,7 @@ export default function Page() {
           entrega.fechaHoraRetiro
         ).toLocaleString()}.`
         : "Tu pedido esta pendiente para recoger en tienda."
-      : `Estado de entrega: ${entrega?.estadoEntrega ?? "Pendiente"}`;
+      : `Estado de entrega: ${formatearEstadoEntrega(entrega?.estadoEntrega)}`;
     const observacionIncidencia = obtenerObservacionIncidencia(entrega);
     const mostrarSeguimientoEntrega = esDomicilio && (esSeccionPendientes || pasoDomicilioActivo === 3);
     const detalleVisible = isDetallePedidoAbierto(seccionKey, pedido.idPedido);

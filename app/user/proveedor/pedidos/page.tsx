@@ -10,6 +10,7 @@ type Producto = {
   nombre: string;
   categoria: string | null;
   precio: number;
+  precio_base: number;
   stock: number;
   pedidos: boolean;
   estados: string | null;
@@ -40,6 +41,10 @@ const Search = () => (
 );
 
 const MONEDA = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function ProveedorPedidosPage() {
   const [query, setQuery] = React.useState("");
@@ -74,8 +79,8 @@ export default function ProveedorPedidosPage() {
         const json = await res.json();
         if (!json?.ok) throw new Error(json?.error ?? "Respuesta invalida");
         if (!cancelado) setProductos(json.data as Producto[]);
-      } catch (e: any) {
-        if (!cancelado) setError(e?.message ?? "Error al cargar productos");
+      } catch (e: unknown) {
+        if (!cancelado) setError(getErrorMessage(e, "Error al cargar productos"));
       } finally {
         if (!cancelado) setCargando(false);
       }
@@ -95,8 +100,10 @@ export default function ProveedorPedidosPage() {
         const json = await res.json();
         if (!json?.ok) throw new Error(json?.error ?? "No fue posible cargar los pedidos");
         if (!cancelado) setPedidosProveedor(json.data as PedidoProveedor[]);
-      } catch (e: any) {
-        if (!cancelado) setErrorPedidosProveedor(e?.message ?? "Error al cargar las solicitudes");
+      } catch (e: unknown) {
+        if (!cancelado) {
+          setErrorPedidosProveedor(getErrorMessage(e, "Error al cargar las solicitudes"));
+        }
       } finally {
         if (!cancelado) setCargandoPedidosProveedor(false);
       }
@@ -114,7 +121,7 @@ export default function ProveedorPedidosPage() {
   const filtrados = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     return productos.filter((p) => {
-      const texto = [p.nombre ?? "", p.categoria ?? "Sin categoria", String(p.precio ?? ""), String(p.stock ?? "")]
+      const texto = [p.nombre ?? "", p.categoria ?? "Sin categoria", String(p.precio_base ?? ""), String(p.stock ?? "")]
         .join(" ")
         .toLowerCase();
       const coincideTexto = q ? texto.includes(q) : true;
@@ -202,8 +209,8 @@ export default function ProveedorPedidosPage() {
           ? "Solicitud aceptada y stock actualizado."
           : "Solicitud rechazada correctamente."
       );
-    } catch (e: any) {
-      setErrorSolicitudes(e?.message ?? "No fue posible procesar la solicitud.");
+    } catch (e: unknown) {
+      setErrorSolicitudes(getErrorMessage(e, "No fue posible procesar la solicitud."));
     } finally {
       setProcesandoPedidoId(null);
     }
@@ -225,8 +232,8 @@ export default function ProveedorPedidosPage() {
       await new Promise((resolve) => setTimeout(resolve, 500));
       setExitoPedido("Solicitud enviada");
       setCantidadPedido("");
-    } catch (e: any) {
-      setErrorPedido(e?.message ?? "No fue posible enviar la solicitud.");
+    } catch (e: unknown) {
+      setErrorPedido(getErrorMessage(e, "No fue posible enviar la solicitud."));
     } finally {
       setGuardandoPedido(false);
     }
@@ -281,7 +288,7 @@ export default function ProveedorPedidosPage() {
                     <tr>
                       <th className="px-4 py-2 font-semibold">Producto</th>
                       <th className="px-4 py-2 font-semibold">Categoria</th>
-                      <th className="px-4 py-2 font-semibold">Precio</th>
+                      <th className="px-4 py-2 font-semibold">Precio base</th>
                       <th className="px-4 py-2 font-semibold text-center">Cantidad</th>
                       <th className="px-4 py-2 font-semibold">Imagen</th>
                       <th className="px-4 py-2 font-semibold">Acciones</th>
@@ -294,7 +301,7 @@ export default function ProveedorPedidosPage() {
                         <tr key={pedido.id} className="align-top hover:bg-gray-50">
                           <td className="px-4 py-2 text-center font-semibold text-gray-900">{producto.nombre}</td>
                           <td className="px-4 py-2">{producto.categoria ?? "Sin categoria"}</td>
-                          <td className="px-4 py-2">{MONEDA.format(producto.precio)}</td>
+                          <td className="px-4 py-2">{MONEDA.format(producto.precio_base)}</td>
                           <td className="px-4 py-2 text-center font-semibold text-gray-900">{pedido.cantidad}</td>
                           <td className="px-4 py-2">
                             {producto.imagen ? (
@@ -415,7 +422,7 @@ export default function ProveedorPedidosPage() {
                 <tr>
                   <th className="px-6 py-3 text-center font-semibold">Producto</th>
                   <th className="px-6 py-3 text-center font-semibold">Categoria</th>
-                  <th className="px-6 py-3 text-center font-semibold">Precio</th>
+                  <th className="px-6 py-3 text-center font-semibold">Precio base</th>
                   <th className="px-6 py-3 text-center font-semibold">Descripcion</th>
                   <th className="px-6 py-3 text-center font-semibold">Imagen</th>
                 </tr>
@@ -452,7 +459,7 @@ export default function ProveedorPedidosPage() {
                       <tr key={p.id} className="hover:bg-gray-50/60">
                         <td className="px-6 text-center py-3">{p.nombre}</td>
                         <td className="px-6 text-center py-3">{p.categoria ?? "Sin categoria"}</td>
-                        <td className="px-6 text-center py-3">{MONEDA.format(p.precio)}</td>
+                        <td className="px-6 text-center py-3">{MONEDA.format(p.precio_base)}</td>
                         <td className="px-6 text-center py-3">
                           {descripcion ? (
                             <span className="text-sm text-gray-600" title={p.descripcion ?? undefined}>
@@ -478,7 +485,7 @@ export default function ProveedorPedidosPage() {
                   {!cargando && !error && filtrados.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
-                        No hay productos para "{query}".
+                        No hay productos para &quot;{query}&quot;.
                       </td>
                     </tr>
                   )}
