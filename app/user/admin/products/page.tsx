@@ -939,9 +939,6 @@ export default function ProductsPage() {
         <header className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-200">Inventario</p>
           <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Gestion de productos</h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-white/75 sm:text-base">
-            Supervisa disponibilidad, revisa el catalogo y gestiona pedidos de reposicion sin alterar el flujo operativo.
-          </p>
         </header>
 
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end">

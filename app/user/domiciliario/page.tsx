@@ -15,9 +15,6 @@ export default async function Page() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.12),transparent_22%),radial-gradient(circle_at_80%_30%,rgba(56,189,248,0.18),transparent_24%)]" />
 
         <div className="relative z-10">
-          <span className="inline-flex rounded-full border border-[#c9a55c]/35 bg-[#c9a55c]/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.35em] text-[#f5deb3]">
-            Ruta premium
-          </span>
           <h1 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-5xl">
             Panel de entregas
           </h1>

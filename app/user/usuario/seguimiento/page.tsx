@@ -918,8 +918,21 @@ export default function Page() {
             </div>
           </div>
         ) : pedidos.length === 0 ? (
-          <div className="rounded-3xl border border-white/10 bg-white/10 p-10 text-center text-slate-300 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
-            No tienes pedidos registrados en este momento.
+          <div className="rounded-3xl border border-white/10 bg-white/10 px-6 py-10 text-center text-slate-300 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:px-10">
+            <div className="mx-auto flex max-w-2xl flex-col items-center">
+              <Image
+                src="/img/envios.png"
+                alt="Seguimiento de envios"
+                width={360}
+                height={260}
+                className="h-auto w-full max-w-xs object-contain sm:max-w-sm"
+                priority={false}
+              />
+              <h2 className="mt-6 text-2xl font-bold text-white">Aun no tienes pedidos registrados</h2>
+              <p className="mt-3 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
+                Cuando realices una compra, aqui podras consultar el estado de tu pedido y el detalle de los productos.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
