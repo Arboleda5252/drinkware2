@@ -1,0 +1,45 @@
+name: SonarCloud Next.js Analysis
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Permite un análisis preciso del historial de Git
+
+      # Opcional: Descomenta las siguientes líneas si tienes tests unitarios 
+      # y quieres que SonarCloud muestre el porcentaje de código cubierto (% Coverage)
+      #
+      # - name: Configurar Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: 20
+      #     cache: 'npm' # o 'yarn' o 'pnpm'
+      #
+      # - name: Instalar dependencias
+      #   run: npm ci
+      #
+      # - name: Ejecutar Tests con Cobertura
+      #   run: npm run test:coverage # Asegúrate de que este script genere la carpeta /coverage
+
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
