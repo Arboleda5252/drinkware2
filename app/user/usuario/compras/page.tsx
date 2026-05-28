@@ -96,6 +96,12 @@ const formatoCOP = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
+const formatoRetiroResumen = new Intl.DateTimeFormat("es-CO", {
+  dateStyle: "full",
+  timeStyle: "short",
+  timeZone: "America/Bogota",
+});
+
 const placeholderImagen = "/no-image.png";
 
 export default function Page() {
@@ -119,6 +125,8 @@ export default function Page() {
     "Contraentrega" | "Efectivo" | "Stripe"
   >("Contraentrega");
   const [fechaHoraRetiro, setFechaHoraRetiro] = useState("");
+  const [fechaRetiroInput, setFechaRetiroInput] = useState("");
+  const [horaRetiroInput, setHoraRetiroInput] = useState("");
   const [entregarOtraDireccion, setEntregarOtraDireccion] = useState(false);
   const [nombreRecibe, setNombreRecibe] = useState("");
   const [telefonoContacto, setTelefonoContacto] = useState("");
@@ -145,6 +153,19 @@ export default function Page() {
     const offset = ahora.getTimezoneOffset();
     const local = new Date(ahora.getTime() - offset * 60_000);
     return local.toISOString().slice(0, 16);
+  }, []);
+
+  const fechaMinimaRetiro = useMemo(() => ahoraMinimaRetiro.slice(0, 10), [ahoraMinimaRetiro]);
+  const horaMinimaRetiro = useMemo(() => ahoraMinimaRetiro.slice(11, 16), [ahoraMinimaRetiro]);
+  const resumenRetiroSeleccionado = useMemo(() => {
+    if (!fechaHoraRetiro) return null;
+    const parsed = new Date(fechaHoraRetiro);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return formatoRetiroResumen.format(parsed);
+  }, [fechaHoraRetiro]);
+
+  const actualizarFechaHoraRetiro = useCallback((fecha: string, hora: string) => {
+    setFechaHoraRetiro(fecha && hora ? `${fecha}T${hora}` : "");
   }, []);
 
   const loadData = useCallback(async () => {
@@ -267,6 +288,17 @@ export default function Page() {
     setDireccionEntrega(detalleUsuario?.direccion ?? "");
     setCiudadEntrega(detalleUsuario?.ciudad ?? "");
   }, [detalleUsuario]);
+
+  useEffect(() => {
+    if (!fechaHoraRetiro) {
+      setFechaRetiroInput("");
+      setHoraRetiroInput("");
+      return;
+    }
+
+    setFechaRetiroInput(fechaHoraRetiro.slice(0, 10));
+    setHoraRetiroInput(fechaHoraRetiro.slice(11, 16));
+  }, [fechaHoraRetiro]);
 
   const actualizarPedido = useCallback(
     async (pedidoId: number, payload: Record<string, unknown>) => {
@@ -703,13 +735,42 @@ export default function Page() {
           )}
 
           {cargando ? (
-            <div className="space-y-4">
-              {Array.from({ length: 2 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-40 animate-pulse rounded-3xl border border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.3)] backdrop-blur-md"
-                />
-              ))}
+            <div className="rounded-3xl border border-white/10 bg-white/10 p-10 shadow-[0_25px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-14">
+              <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex items-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg ring-1 ring-white/10"
+                >
+                  <svg
+                    className="mr-3 size-5 animate-spin text-white"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    />
+                    <path
+                      className="opacity-90"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                  Cargando tu carrito
+                </button>
+                <p className="mt-6 text-sm font-semibold uppercase tracking-[0.3em] text-sky-300">
+                  Espera un momento
+                </p>
+                <h2 className="mt-4 text-3xl font-extrabold text-white sm:text-4xl">
+                  Estamos preparando tus compras.
+                </h2>
+              </div>
             </div>
           ) : estadoResumen ? (
             <div className="rounded-3xl border border-white/10 bg-white/10 p-10 text-center shadow-[0_25px_80px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-14">
@@ -775,8 +836,7 @@ export default function Page() {
                       </p>
 
                       <p className="text-sm text-slate-400">
-                        Pedido #{item.pedido.idPedido} | Creado el{" "}
-                        {new Date(item.pedido.fechaCreacion).toLocaleDateString()}
+                        Num. de Referencia {item.pedido.idPedido} 
                       </p>
                     </div>
 
@@ -899,18 +959,86 @@ export default function Page() {
             </div>
 
             {tipoEntrega === "Retiro_tienda" ? (
-              <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p className="text-sm font-semibold text-slate-200">Retiro en tienda</p>
-                <label className="block text-sm text-slate-300">
-                  Hora al recoger
-                  <input
-                    type="datetime-local"
-                    value={fechaHoraRetiro}
-                    onChange={(e) => setFechaHoraRetiro(e.target.value)}
-                    min={ahoraMinimaRetiro}
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white outline-none focus:border-sky-400"
-                  />
-                </label>
+              <div className="mt-5 rounded-3xl border border-sky-300/15 bg-[linear-gradient(135deg,rgba(14,165,233,0.12),rgba(15,23,42,0.92))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-300">
+                      Retiro en tienda
+                    </p>
+                    <h3 className="mt-2 text-lg font-bold text-white">
+                      Elige el dia y la hora para recoger tu pedido
+                    </h3>
+                    <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">
+                      Selecciona un horario posterior al actual. Prepararemos tu compra para que
+                      puedas retirarla sin contratiempos.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-100">
+                        Dia de retiro
+                      </span>
+                      <span className="mt-1 block text-sm text-slate-400">
+                        Elige el dia en el que pasaras por la tienda.
+                      </span>
+                      <input
+                        type="date"
+                        value={fechaRetiroInput}
+                        min={fechaMinimaRetiro}
+                        onChange={(e) => {
+                          const nextFecha = e.target.value;
+                          setFechaRetiroInput(nextFecha);
+                          actualizarFechaHoraRetiro(nextFecha, horaRetiroInput);
+                        }}
+                        className="mt-4 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="text-sm font-semibold text-slate-100">
+                        Hora de retiro
+                      </span>
+                      <span className="mt-1 block text-sm text-slate-400">
+                        Selecciona la hora exacta para recoger el pedido.
+                      </span>
+                      <input
+                        type="time"
+                        value={horaRetiroInput}
+                        min={fechaRetiroInput === fechaMinimaRetiro ? horaMinimaRetiro : undefined}
+                        step={60}
+                        onChange={(e) => {
+                          const nextHora = e.target.value;
+                          setHoraRetiroInput(nextHora);
+                          actualizarFechaHoraRetiro(fechaRetiroInput, nextHora);
+                        }}
+                        className="mt-4 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+                      />
+                    </label>
+                  </div>
+
+                  {resumenRetiroSeleccionado ? (
+                    <div className="mt-4 rounded-2xl border border-sky-300/20 bg-sky-400/10 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">
+                        Retiro programado
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-white">
+                        {resumenRetiroSeleccionado}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-400">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                      Primero elige el dia
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+                      No se permiten horarios pasados
+                    </span>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">

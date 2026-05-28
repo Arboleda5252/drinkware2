@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type EntregaAsignada = {
   idEntrega: number;
@@ -29,10 +29,11 @@ type DomiciliarioPedidosProps = {
 };
 
 const statusStyles: Record<string, string> = {
-  asignada: "bg-sky-100 text-sky-900",
-  asignado: "bg-sky-100 text-sky-900",
-  no_entregado: "bg-rose-100 text-rose-900",
-  cancelado: "bg-slate-200 text-slate-900",
+  asignada: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
+  asignado: "border border-sky-300/30 bg-sky-400/15 text-sky-100",
+  en_camino: "border border-blue-300/30 bg-blue-400/15 text-blue-100",
+  no_entregado: "border border-amber-300/30 bg-amber-400/15 text-amber-100",
+  cancelado: "border border-slate-400/30 bg-slate-400/15 text-slate-100",
 };
 
 function normalizeStatus(value: string | null | undefined) {
@@ -45,6 +46,7 @@ function getStatusLabel(status: string | null) {
   const labels: Record<string, string> = {
     asignada: "Asignada",
     asignado: "Asignada",
+    en_camino: "En camino",
     no_entregado: "No entregado",
     cancelado: "Cancelado",
   };
@@ -53,7 +55,7 @@ function getStatusLabel(status: string | null) {
 }
 
 function getStatusClass(status: string | null) {
-  return statusStyles[normalizeStatus(status)] ?? "bg-slate-100 text-slate-900";
+  return statusStyles[normalizeStatus(status)] ?? "border border-slate-400/20 bg-slate-400/10 text-slate-100";
 }
 
 function formatDate(value: string | null | undefined) {
@@ -72,19 +74,47 @@ function formatDate(value: string | null | undefined) {
   }
 }
 
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-10 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
+      <svg
+        className="size-8 animate-spin text-white"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="none"
+        />
+        <path
+          className="opacity-90"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
+      </svg>
+    </div>
+  );
+}
+
 function PedidoCard({ entrega }: { entrega: EntregaAsignada }) {
   const normalizedStatus = normalizeStatus(entrega.estadoEntrega);
   const fechaPrincipal =
     normalizedStatus === "cancelado" ? entrega.fechaCancelado : entrega.fechaAsignacion;
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm shadow-slate-200/50 transition hover:shadow-md">
+    <article className="group overflow-hidden rounded-[1.75rem] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(2,6,23,0.92))] shadow-[0_20px_60px_rgba(2,6,23,0.35)] transition duration-300 hover:-translate-y-1 hover:border-[#c9a55c]/30 hover:shadow-[0_30px_90px_rgba(2,6,23,0.55)]">
       <div className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-slate-900">
+          <p className="text-xs uppercase tracking-[0.3em] text-[#d1b06a]">Pedido asignado</p>
+          <h3 className="text-lg font-semibold text-white">
             Pedido # {entrega.idPedido} para {entrega.nombreRecibe ?? "Entrega asignada"}
           </h3>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-300">
             {entrega.direccionEntrega ?? "Direccion no registrada"}
           </p>
         </div>
@@ -95,28 +125,28 @@ function PedidoCard({ entrega }: { entrega: EntregaAsignada }) {
           </span>
           <Link
             href={`/user/domiciliario/pedidos/${entrega.idPedido}`}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="rounded-full border border-[#c9a55c]/35 bg-[linear-gradient(135deg,#d2ac67,#9f7b32)] px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110"
           >
             Gestionar entrega
           </Link>
         </div>
       </div>
 
-      <div className="border-t border-slate-200 bg-slate-50/80 px-6 py-5 sm:px-8">
+      <div className="border-t border-white/10 bg-white/[0.03] px-6 py-5 sm:px-8">
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <p className="text-sm font-semibold text-slate-700">Ciudad</p>
-            <p className="text-sm text-slate-600">{entrega.ciudad ?? "No registrada"}</p>
+            <p className="text-sm font-semibold text-slate-100">Ciudad</p>
+            <p className="text-sm text-slate-300">{entrega.ciudad ?? "No registrada"}</p>
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-700">Telefono</p>
-            <p className="text-sm text-slate-600">{entrega.telefonoContacto ?? "No registrado"}</p>
+            <p className="text-sm font-semibold text-slate-100">Telefono</p>
+            <p className="text-sm text-slate-300">{entrega.telefonoContacto ?? "No registrado"}</p>
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-700">
+            <p className="text-sm font-semibold text-slate-100">
               {normalizedStatus === "cancelado" ? "Fecha de cancelacion" : "Fecha de asignacion"}
             </p>
-            <p className="text-sm text-slate-600">{formatDate(fechaPrincipal)}</p>
+            <p className="text-sm text-slate-300">{formatDate(fechaPrincipal)}</p>
           </div>
         </div>
       </div>
@@ -211,7 +241,7 @@ export default function DomiciliarioPedidos({ currentUserId }: DomiciliarioPedid
   const entregasVisibles = useMemo(
     () =>
       entregas.filter((item) =>
-        ["asignada", "asignado", "cancelado", "no_entregado"].includes(
+        ["asignada", "asignado", "en_camino", "no_entregado"].includes(
           normalizeStatus(item.estadoEntrega)
         )
       ),
@@ -220,45 +250,41 @@ export default function DomiciliarioPedidos({ currentUserId }: DomiciliarioPedid
 
   return (
     <section className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm shadow-slate-200/50">
+      <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_18px_50px_rgba(2,6,23,0.2)] backdrop-blur-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold text-slate-900">Tus pedidos asignados</h2>
+            <h2 className="text-2xl font-semibold text-white">Tus pedidos asignados</h2>
             {domiciliario ? (
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-300">
                 Estado laboral: {domiciliario.estadoLaboral} | Disponibilidad: {domiciliario.disponibilidadManual}
               </p>
             ) : null}
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
-            <span className="text-sm text-slate-500">
+            <span className="text-sm text-slate-300">
               {lastUpdated ? `Ultima actualizacion: ${lastUpdated}` : "Actualizando..."}
             </span>
             <button
               type="button"
               onClick={() => void loadPedidos()}
-              className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="inline-flex items-center justify-center rounded-full border border-sky-300/30 bg-sky-400/15 px-4 py-2 text-sm font-semibold text-sky-50 transition hover:bg-sky-400/25"
             >
-              Actualizar pedidos 
+              Actualizar pedidos
             </button>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <div className="rounded-3xl border border-slate-200 bg-white/90 p-8 text-center text-slate-600 shadow-sm shadow-slate-200/50">
-          Cargando pedidos asignados...
-        </div>
+        <LoadingSpinner />
       ) : error ? (
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 text-rose-900 shadow-sm shadow-rose-100">
+        <div className="rounded-[1.75rem] border border-rose-400/25 bg-rose-500/10 p-6 text-rose-100 shadow-[0_18px_50px_rgba(2,6,23,0.2)]">
           {error}
         </div>
       ) : entregasVisibles.length === 0 ? (
-        <div className="rounded-3xl border border-slate-200 bg-white/90 p-10 text-center text-slate-600 shadow-sm shadow-slate-200/50">
-          <p className="text-xl font-semibold text-slate-900">No tienes pedidos visibles en este panel</p>
-          <p className="mt-3 text-sm">
-            Revisa nuevamente en unos minutos
-          </p>
+        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-10 text-center text-slate-300 shadow-[0_18px_50px_rgba(2,6,23,0.2)]">
+          <p className="text-xl font-semibold text-white">No tienes pedidos visibles en este panel</p>
+          <p className="mt-3 text-sm text-slate-300">Revisa nuevamente en unos minutos</p>
         </div>
       ) : (
         <div className="grid gap-6">

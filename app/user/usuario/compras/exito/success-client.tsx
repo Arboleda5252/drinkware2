@@ -21,6 +21,12 @@ const formatoCOP = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
+const formatoRetiro = new Intl.DateTimeFormat("es-CO", {
+  dateStyle: "full",
+  timeStyle: "short",
+  timeZone: "America/Bogota",
+});
+
 const normalizarEntrega = (entrega: string | null) =>
   entrega === "Retiro_tienda" ? "Retiro_tienda" : "Domicilio";
 
@@ -29,6 +35,17 @@ const normalizarMetodo = (metodo: string | null) => {
     return metodo;
   }
   return null;
+};
+
+const formatearRetiro = (value: string | null) => {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return formatoRetiro.format(parsed);
 };
 
 export default function ExitoCompraClient({
@@ -116,10 +133,9 @@ export default function ExitoCompraClient({
       return "En breve estara en tu casa.";
     }
 
-    return retiro
-      ? `Tu pedido y los productos han sido separados. Por favor ve en la fecha especificada: ${new Date(
-          retiro
-        ).toLocaleString("es-CO")}.`
+    const retiroFormateado = formatearRetiro(retiro);
+    return retiroFormateado
+      ? `Tu pedido y los productos han sido separados. Por favor ve en la fecha especificada: ${retiroFormateado}.`
       : "Tu pedido y los productos han sido separados. Por favor ve en la fecha especificada.";
   }, [entregaNormalizada, retiro]);
 
@@ -156,9 +172,35 @@ export default function ExitoCompraClient({
     {detallePago ? <p className="mt-2 text-lg text-zinc-400">{detallePago}</p> : null}
     
     {estado === "loading" ? (
-      <p className="mt-3 text-sm font-medium text-amber-400/90 animate-pulse">
-        Espera un momento mientras validamos el pago.
-      </p>
+      <div className="mt-6 flex justify-start">
+        <button
+          type="button"
+          disabled
+          className="inline-flex items-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg ring-1 ring-white/10"
+        >
+          <svg
+            className="mr-3 size-5 animate-spin text-white"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+              fill="none"
+            />
+            <path
+              className="opacity-90"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
+          </svg>
+          Espera un momento mientras validamos el pago.
+        </button>
+      </div>
     ) : null}
 
     <div className="mt-8 grid gap-4 rounded-2xl bg-zinc-850 border border-zinc-800 p-6 sm:grid-cols-3">

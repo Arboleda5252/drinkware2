@@ -2,13 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
-import { FaChevronDown } from "react-icons/fa";
+import { FaChevronDown, FaEye } from "react-icons/fa";
+import { FaMotorcycle } from "react-icons/fa6";
 import { GoClockFill } from "react-icons/go";
 
 type Usuario = {
   id: number;
   nombre: string;
   apellido?: string;
+};
+
+type UsuarioDirectorio = {
+  id: number;
+  nombre: string | null;
+  apellido: string | null;
+};
+
+type Domiciliario = {
+  idDomiciliario: number;
+  idUsuario: number;
 };
 
 type Pedido = {
@@ -72,6 +84,16 @@ type Entrega = {
   observacion: string | null;
 };
 
+type HistorialEntrega = {
+  idHistorial: number;
+  idEntrega: number;
+  estadoAnterior: string | null;
+  estadoNuevo: string;
+  fechaCambio: string;
+  comentario: string | null;
+  fotoEvidencia: string | null;
+};
+
 type PedidoConDetalle = {
   pedido: Pedido;
   detalles: Array<{
@@ -110,8 +132,31 @@ const formatearFecha = (value: string | null | undefined): ReactNode =>
 const esContraentrega = (metodoPago: string | null | undefined) =>
   normalizarTexto(metodoPago).includes("contraentrega");
 
+const esEstadoIncidenciaEntrega = (estado: string | null | undefined) => {
+  const normalizado = normalizarTexto(estado);
+  return normalizado.includes("no_entregado") || normalizado.includes("cancelado");
+};
+
+const obtenerEstadoIncidenciaEntrega = (entrega: Entrega | null) => {
+  const estado = normalizarTexto(entrega?.estadoEntrega);
+
+  if (estado.includes("no_entregado")) {
+    return "No entregado";
+  }
+
+  if (estado.includes("cancelado")) {
+    return "Cancelado";
+  }
+
+  return null;
+};
+
 const obtenerPasoDomicilio = (entrega: Entrega | null) => {
   const estado = normalizarTexto(entrega?.estadoEntrega);
+
+  if (estado.includes("no_entregado") || estado.includes("cancelado")) {
+    return 2;
+  }
 
   if (estado.includes("entregado") || entrega?.fechaEntrega) {
     return 3;
@@ -131,8 +176,11 @@ const obtenerPasoDomicilio = (entrega: Entrega | null) => {
 export default function Page() {
   const [usuarioActivo, setUsuarioActivo] = useState<Usuario | null>(null);
   const [pedidos, setPedidos] = useState<PedidoConDetalle[]>([]);
+  const [domiciliariosNombres, setDomiciliariosNombres] = useState<Map<number, string>>(new Map());
+  const [observacionesHistorial, setObservacionesHistorial] = useState<Map<number, string>>(new Map());
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detalleAbierto, setDetalleAbierto] = useState<Record<string, boolean>>({});
   const [seccionesAbiertas, setSeccionesAbiertas] = useState({
     pendientes: true,
     entregados: false,
@@ -175,11 +223,14 @@ export default function Page() {
           nombre: String(sesionJson.user?.nombre ?? sesionJson.user?.nombreusuario ?? ""),
         };
 
-        const [pedidosRaw, detallesRaw, pagosRaw, entregasRaw] = await Promise.all([
+        const [pedidosRaw, detallesRaw, pagosRaw, entregasRaw, domiciliariosRaw, usuariosRaw, historialRaw] = await Promise.all([
           fetchJson<Pedido[]>("/api/pedidos"),
           fetchJson<DetallePedido[]>("/api/detalle_pedido"),
           fetchJson<Pago[]>("/api/pago"),
           fetchJson<Entrega[]>("/api/entrega"),
+          fetchJson<Domiciliario[]>("/api/domiciliario"),
+          fetchJson<UsuarioDirectorio[]>("/api/usuarios"),
+          fetchJson<HistorialEntrega[]>("/api/historial_entrega"),
         ]);
 
         const pedidosPropios = pedidosRaw.filter((pedido) => {
@@ -210,6 +261,29 @@ export default function Page() {
         );
 
         const productosMap = new Map<number, Producto | null>(productosPairs);
+        const usuariosMap = new Map<number, UsuarioDirectorio>(
+          usuariosRaw.map((item) => [Number(item.id), item])
+        );
+        const domiciliariosMap = new Map<number, string>(
+          domiciliariosRaw.map((domiciliario) => {
+            const usuarioDomiciliario = usuariosMap.get(Number(domiciliario.idUsuario));
+            const nombreCompleto =
+              [usuarioDomiciliario?.nombre, usuarioDomiciliario?.apellido]
+                .filter(Boolean)
+                .join(" ")
+                .trim() || `Domiciliario #${domiciliario.idDomiciliario}`;
+            return [Number(domiciliario.idDomiciliario), nombreCompleto];
+          })
+        );
+        const observacionesPorEntrega = new Map<number, string>();
+        for (const item of historialRaw) {
+          if (!esEstadoIncidenciaEntrega(item.estadoNuevo) || !item.comentario?.trim()) {
+            continue;
+          }
+          if (!observacionesPorEntrega.has(Number(item.idEntrega))) {
+            observacionesPorEntrega.set(Number(item.idEntrega), item.comentario.trim());
+          }
+        }
 
         const pedidosConDetalle: PedidoConDetalle[] = pedidosPropios.map((pedido) => {
           const detalles = detallesRaw
@@ -228,6 +302,8 @@ export default function Page() {
 
         if (!cancelado) {
           setUsuarioActivo(usuario);
+          setDomiciliariosNombres(domiciliariosMap);
+          setObservacionesHistorial(observacionesPorEntrega);
           setPedidos(
             pedidosConDetalle.sort(
               (a, b) =>
@@ -239,6 +315,8 @@ export default function Page() {
         if (!cancelado) {
           setError(err instanceof Error ? err.message : "No se pudo cargar el seguimiento.");
           setPedidos([]);
+          setDomiciliariosNombres(new Map());
+          setObservacionesHistorial(new Map());
           setUsuarioActivo(null);
         }
       } finally {
@@ -287,10 +365,57 @@ export default function Page() {
     }));
   };
 
+  const toggleDetallePedido = (
+    key: "pendientes" | "entregados" | "cancelados",
+    pedidoId: number
+  ) => {
+    const stateKey = `${key}-${pedidoId}`;
+    setDetalleAbierto((prev) => ({
+      ...prev,
+      [stateKey]: !(prev[stateKey] ?? (key === "pendientes")),
+    }));
+  };
+
+  const isDetallePedidoAbierto = (
+    key: "pendientes" | "entregados" | "cancelados",
+    pedidoId: number
+  ) => detalleAbierto[`${key}-${pedidoId}`] ?? (key === "pendientes");
+
+  const obtenerNombreDomiciliario = (idDomiciliario: number | null) => {
+    if (!idDomiciliario) {
+      return "Pendiente por asignar";
+    }
+
+    return domiciliariosNombres.get(idDomiciliario) ?? `Asignado #${idDomiciliario}`;
+  };
+
+  const obtenerObservacionIncidencia = (entrega: Entrega | null) => {
+    if (!entrega?.idEntrega) {
+      return null;
+    }
+
+    return observacionesHistorial.get(Number(entrega.idEntrega)) ?? null;
+  };
+
+  const formatearEstadoEntrega = (estado: string | null | undefined) => {
+    if (!estado) {
+      return "Pendiente";
+    }
+
+    const normalizado = estado.replaceAll("_", " ").trim();
+    if (!normalizado) {
+      return "Pendiente";
+    }
+
+    return normalizado.charAt(0).toUpperCase() + normalizado.slice(1).toLowerCase();
+  };
+
   const renderPedido = (
     { pedido, detalles, pago, entrega }: PedidoConDetalle,
-    esSeccionPendientes: boolean
+    seccionKey: "pendientes" | "entregados" | "cancelados"
   ) => {
+    const esSeccionPendientes = seccionKey === "pendientes";
+    const esSeccionCancelados = seccionKey === "cancelados";
     const esRetiroTienda = pedido.tipoEntrega === "Retiro_tienda";
     const esDomicilio = !esRetiroTienda;
     const totalPedido = pedido.subtotal + pedido.costoEnvio;
@@ -303,7 +428,45 @@ export default function Page() {
           entrega.fechaHoraRetiro
         ).toLocaleString()}.`
         : "Tu pedido esta pendiente para recoger en tienda."
-      : `Estado de entrega: ${entrega?.estadoEntrega ?? "Pendiente"}`;
+      : `Estado de entrega: ${formatearEstadoEntrega(entrega?.estadoEntrega)}`;
+    const observacionIncidencia = obtenerObservacionIncidencia(entrega);
+    const mostrarSeguimientoEntrega = esDomicilio && (esSeccionPendientes || pasoDomicilioActivo === 3);
+    const detalleVisible = isDetallePedidoAbierto(seccionKey, pedido.idPedido);
+    const observacionCancelacion =
+      observacionIncidencia ??
+      entrega?.observacion ??
+      pago?.observacion ??
+      pedido.observacion ??
+      "Sin observacion registrada.";
+
+    if (esSeccionCancelados) {
+      return (
+        <article
+          key={pedido.idPedido}
+          className="rounded-3xl border border-white/10 bg-white/10 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.32)] backdrop-blur-md"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-bold text-white">Compra cancelada</h2>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <p className="text-slate-400">
+              <span className="font-semibold text-slate-300">Fecha:</span>{" "}
+              {new Date(pedido.fechaCreacion).toLocaleString()}
+            </p>
+            <p className="text-slate-400">
+              <span className="font-semibold text-slate-300">Valor:</span>{" "}
+              <span className="font-semibold text-white">{formatoCOP.format(totalPedido)}</span>
+            </p>
+          </div>
+
+          <p className="mt-3 text-sm leading-6 text-rose-200">
+            <span className="font-semibold text-rose-100">Observacion:</span>{" "}
+            {observacionCancelacion}
+          </p>
+        </article>
+      );
+    }
 
     return (
       <article
@@ -320,10 +483,26 @@ export default function Page() {
               {(pedido.estadoPedido ?? "").toLowerCase() === "pendiente" && (
                 <p className="mt-1 text-base text-slate-300">{mensajePendiente}</p>
               )}
+              {!esSeccionPendientes && (
+                <p className="mt-1 text-sm text-slate-400">
+                  {detalles.length} producto{detalles.length === 1 ? "" : "s"} | Total{" "}
+                  {formatoCOP.format(totalPedido)}
+                </p>
+              )}
             </div>
+            <button
+              type="button"
+              onClick={() => toggleDetallePedido(seccionKey, pedido.idPedido)}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-black/30"
+            >
+              <FaEye className="h-4 w-4" />
+              {detalleVisible ? "Ocultar" : "Ver detalle"}
+            </button>
           </div>
         </div>
 
+        {detalleVisible ? (
+        <>
         <div className="space-y-4 px-6 py-5">
           {detalles.map(({ detalle, producto }) => {
             const imagen = producto?.imagen || placeholderImagen;
@@ -332,34 +511,34 @@ export default function Page() {
             return (
               <div
                 key={detalle.idDetallePedido}
-                className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center"
+                className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center"
               >
-                <div className="flex items-center justify-center rounded-2xl bg-white/5 p-2 ring-1 ring-white/10">
+                <div className="flex items-center justify-center rounded-xl bg-white/5 p-1.5 ring-1 ring-white/10">
                   <Image
                     src={imagen}
                     alt={producto?.nombre ?? "Producto sin nombre"}
-                    width={96}
-                    height={120}
-                    className="h-32 w-24 rounded-lg object-cover"
+                    width={72}
+                    height={88}
+                    className="h-24 w-18 rounded-lg object-cover sm:h-24 sm:w-18"
                   />
                 </div>
 
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-white">
                     {producto?.nombre ?? `Producto #${detalle.idProducto}`}
                   </h3>
-                  <p className="mt-1 text-base text-slate-400">
+                  <p className="mt-1 text-sm text-slate-400">
                     Categoria: {producto?.categoria ?? "Sin categoria"}
                   </p>
-                  <p className="mt-1 text-base text-slate-400">
+                  <p className="mt-1 text-sm text-slate-400">
                     Cantidad: {detalle.cantidad} | Precio unitario:{" "}
                     {formatoCOP.format(detalle.precioUnitario)}
                   </p>
                 </div>
 
-                <div className="text-right">
-                  <p className="text-base text-slate-400">Subtotal</p>
-                  <p className="text-xl font-bold text-white">
+                <div className="text-left sm:text-right">
+                  <p className="text-sm text-slate-400">Subtotal</p>
+                  <p className="text-lg font-bold text-white">
                     {formatoCOP.format(subtotal)}
                   </p>
                 </div>
@@ -369,15 +548,16 @@ export default function Page() {
         </div>
 
         {esDomicilio ? (
-          <div className="border-t border-white/10 bg-black/10 px-6 py-5">
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 ring-1 ring-white/5">
-                <p className="text-base font-semibold text-slate-200">Entrega</p>
-                <p className="mt-2 text-base text-slate-300">Tipo: Domicilio</p>
-                <p className="mt-1 text-base text-slate-300">
-                  Estado: {entrega?.estadoEntrega ?? "Sin registrar"}
-                </p>
-                {esSeccionPendientes && (
+          <div className="border-t border-white/10 bg-black/10 px-6 py-4">
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3.5 ring-1 ring-white/5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-100">Entrega</p>
+                  <span className="rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-200">
+                    Domicilio
+                  </span>
+                </div>
+                {/* {esSeccionPendientes && (
                   <div className="mt-4">
                     <div className="mb-3 flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
                       <span>Seguimiento</span>
@@ -408,68 +588,165 @@ export default function Page() {
                       })}
                     </div>
                   </div>
+                )} */}
+                {mostrarSeguimientoEntrega && (
+                  <div className="mt-4 rounded-xl border border-slate-800/60 bg-slate-900/40 p-3.5 backdrop-blur-sm">
+                    <div className="mb-3 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                      <span>Seguimiento de entrega</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-2 relative">
+                      {pasosDomicilio.map((paso, index) => {
+                        const activo = index <= pasoDomicilioActivo;
+                        const esUltimoActivo = index === pasoDomicilioActivo;
+                        const entregaFinalizada = pasoDomicilioActivo === 3;
+                        const incidenciaEntrega = obtenerEstadoIncidenciaEntrega(entrega);
+                        const pasoEnCaminoConIncidencia = index === 2 && incidenciaEntrega !== null;
+                        const labelPaso = pasoEnCaminoConIncidencia ? incidenciaEntrega : paso.label;
+
+                        return (
+                          <div
+                            key={`${pedido.idPedido}-${labelPaso}-${index}`}
+                            className={`flex flex-col items-center space-y-3 ${paso.span}`}
+                          >
+                            {/* Barra indicadora con efectos de estado */}
+                            <div className="w-full relative px-0.5">
+                              <div
+                                className={`h-2.5 rounded-full transition-all duration-500 ${activo
+                                    ? pasoEnCaminoConIncidencia
+                                      ? "bg-gradient-to-r from-rose-600 to-red-500 shadow-[0_0_14px_rgba(239,68,68,0.35)]"
+                                      : entregaFinalizada
+                                      ? "bg-gradient-to-r from-emerald-500 to-green-400 shadow-[0_0_14px_rgba(74,222,128,0.35)]"
+                                      : "bg-gradient-to-r from-sky-500 to-sky-400 shadow-[0_0_14px_rgba(56,189,248,0.3)]"
+                                    : "bg-slate-800"
+                                  }`}
+                              />
+                              {esUltimoActivo && (
+                                <span className="absolute -top-5 right-0 flex translate-x-1/4 items-center justify-center">
+                                  <span
+                                    className={`absolute inline-flex h-6 w-6 animate-ping rounded-full ${
+                                      pasoEnCaminoConIncidencia
+                                        ? "bg-rose-300/25"
+                                        : entregaFinalizada
+                                          ? "bg-emerald-300/25"
+                                          : "bg-cyan-300/25"
+                                    }`}
+                                  />
+                                  <span
+                                    className={`relative inline-flex h-8 w-8 items-center justify-center rounded-full border bg-slate-950/95 shadow-[0_0_16px_rgba(56,189,248,0.28)] ${
+                                      pasoEnCaminoConIncidencia
+                                        ? "border-rose-300/35 text-rose-200 shadow-[0_0_16px_rgba(239,68,68,0.3)]"
+                                        : entregaFinalizada
+                                        ? "border-emerald-300/35 text-emerald-200 shadow-[0_0_16px_rgba(74,222,128,0.32)]"
+                                        : "border-sky-300/35 text-cyan-200 shadow-[0_0_16px_rgba(56,189,248,0.28)]"
+                                    }`}
+                                  >
+                                    <FaMotorcycle className="h-3.5 w-3.5" />
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Texto estilizado según estado */}
+                            <p
+                              className={`text-center text-xs font-medium tracking-wide transition-colors duration-300 leading-4 max-w-[100px] ${esUltimoActivo
+                                  ? pasoEnCaminoConIncidencia
+                                    ? "text-rose-300 font-semibold"
+                                    : entregaFinalizada
+                                      ? "text-emerald-300 font-semibold"
+                                      : "text-sky-400 font-semibold"
+                                  : activo
+                                    ? "text-slate-300"
+                                    : "text-slate-500"
+                                }`}
+                            >
+                              {labelPaso}
+                            </p>
+                            {pasoEnCaminoConIncidencia && observacionIncidencia ? (
+                              <p className="max-w-[180px] text-center text-[11px] font-medium leading-4 text-rose-300">
+                                {observacionIncidencia}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Domiciliario
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {entrega?.idDomiciliario ? `Asignado #${entrega.idDomiciliario}` : "Pendiente por asignar"}
-                    </p>
+                {esSeccionPendientes ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Domiciliario
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {obtenerNombreDomiciliario(entrega?.idDomiciliario ?? null)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Recibe
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {entrega?.nombreRecibe ?? "Sin registrar"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3 sm:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Direccion de entrega
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {entrega?.direccionEntrega ?? "Sin registrar"}
+                      </p>
+                      <p className="mt-1 text-base text-slate-400">
+                        Ciudad: {entrega?.ciudad ?? "Sin registrar"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Fecha programada
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaProgramada)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Fecha de asignacion
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaAsignacion)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Salida
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaSalida)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Entrega final
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaEntrega)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Recibe
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {entrega?.nombreRecibe ?? "Sin registrar"}
-                    </p>
+                ) : (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-black/10 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        Fecha de entrega
+                      </p>
+                      <p className="mt-2 text-base text-slate-300">
+                        {formatearFecha(entrega?.fechaEntrega)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="rounded-2xl bg-black/10 p-3 sm:col-span-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Direccion de entrega
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {entrega?.direccionEntrega ?? "Sin registrar"}
-                    </p>
-                    <p className="mt-1 text-base text-slate-400">
-                      Ciudad: {entrega?.ciudad ?? "Sin registrar"}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Fecha programada
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaProgramada)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Fecha de asignacion
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaAsignacion)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Salida
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaSalida)}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-black/10 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      Entrega final
-                    </p>
-                    <p className="mt-2 text-base text-slate-300">
-                      {formatearFecha(entrega?.fechaEntrega)}
-                    </p>
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -545,6 +822,8 @@ export default function Page() {
             </div>
           </div>
         )}
+        </>
+        ) : null}
       </article>
     );
   };
@@ -582,7 +861,7 @@ export default function Page() {
             </div>
           ) : (
             <div className="space-y-6">
-              {items.map((item) => renderPedido(item, key === "pendientes"))}
+              {items.map((item) => renderPedido(item, key))}
             </div>
           )}
         </div>
@@ -598,9 +877,8 @@ export default function Page() {
             <h1 className="text-3xl font-bold text-white">Mis pedidos</h1>
             {usuarioActivo && (
               <p className="mt-2 text-sm text-slate-300">
-                Hola, 
-                <span className="font-semibold text-white">
-                  {usuarioActivo.nombre} {usuarioActivo.apellido}
+                Hola, <span className="font-semibold text-white">
+                   {usuarioActivo.nombre} {usuarioActivo.apellido}
                 </span>
                 . Aquí puedes rastrear tus productos.
               </p>
@@ -615,17 +893,46 @@ export default function Page() {
         )}
 
         {cargando ? (
-          <div className="space-y-4">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div
-                key={index}
-                className="h-48 animate-pulse rounded-3xl border border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.3)] backdrop-blur-md"
-              />
-            ))}
+          <div className="flex min-h-[320px] items-center justify-center rounded-3xl border border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.3)] backdrop-blur-md">
+            <div className="inline-flex items-center justify-center rounded-full bg-slate-900 p-5 shadow-lg ring-1 ring-white/10">
+              <svg
+                className="size-8 animate-spin text-white"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-90"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+            </div>
           </div>
         ) : pedidos.length === 0 ? (
-          <div className="rounded-3xl border border-white/10 bg-white/10 p-10 text-center text-slate-300 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
-            No tienes pedidos registrados en este momento.
+          <div className="rounded-3xl border border-white/10 bg-white/10 px-6 py-10 text-center text-slate-300 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:px-10">
+            <div className="mx-auto flex max-w-2xl flex-col items-center">
+              <Image
+                src="/img/envios.png"
+                alt="Seguimiento de envios"
+                width={360}
+                height={260}
+                className="h-auto w-full max-w-xs object-contain sm:max-w-sm"
+                priority={false}
+              />
+              <h2 className="mt-6 text-2xl font-bold text-white">Aun no tienes pedidos registrados</h2>
+              <p className="mt-3 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
+                Cuando realices una compra, aqui podras consultar el estado de tu pedido y el detalle de los productos.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">

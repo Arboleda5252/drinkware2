@@ -8,12 +8,16 @@ type ProductoDetalle = {
   nombre: string;
   categoria: string | null;
   precio: number;
+  precio_base: number;
   stock: number;
   imagen: string | null;
   descripcion: string | null;
   id_proveedor: number | null;
   pedidos: boolean;
   estados: string | null;
+  iva_porcentaje?: number;
+  subida_porcentaje?: number;
+  precio_cliente?: number;
 };
 
 // GET
@@ -28,11 +32,15 @@ export async function GET(
         p.idproducto AS id,
         p.nombre,
         p.categoria,
-        p.precio::double precision AS precio,
+        p.precio_cliente::double precision AS precio,
+        p.precio::double precision AS precio_base,
         p.stock::int AS stock,
         p.imagen,
         p.descripcion,
         p.id_proveedor,
+        p.iva_porcentaje::double precision AS iva_porcentaje,
+        p.subida_porcentaje::double precision AS subida_porcentaje,
+        p.precio_cliente::double precision AS precio_cliente,
         EXISTS (
           SELECT 1
           FROM public.pedidosproveedor AS pp
@@ -71,9 +79,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ ok: false, error: "ID inválido" }, { status: 400 });
     }
 
-    let body: any = null;
+    let body: Record<string, unknown> | null = null;
     try {
-      body = await req.json();
+      body = (await req.json()) as Record<string, unknown>;
     } catch {
       body = null;
     }
@@ -208,6 +216,67 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ ok: true, data: { eliminados: rows.length } });
     }
 
+    if (accion === "actualizar_porcentajes") {
+      const subidaPorcentaje = Number(body?.subida_porcentaje ?? body?.suba);
+      const ivaPorcentajeInput = body?.iva_porcentaje;
+      const ivaPorcentaje =
+        ivaPorcentajeInput === undefined ? undefined : Number(ivaPorcentajeInput);
+
+      if (!Number.isFinite(subidaPorcentaje) || subidaPorcentaje < 0) {
+        return NextResponse.json(
+          { ok: false, error: "La SUBA debe ser un numero valido" },
+          { status: 400 }
+        );
+      }
+
+      if (
+        ivaPorcentaje !== undefined &&
+        (!Number.isFinite(ivaPorcentaje) || ivaPorcentaje < 0)
+      ) {
+        return NextResponse.json(
+          { ok: false, error: "El IVA debe ser un numero valido" },
+          { status: 400 }
+        );
+      }
+
+      const { rows } = await sql<ProductoDetalle>(
+        `
+          UPDATE public.producto
+          SET
+            subida_porcentaje = $2,
+            iva_porcentaje = COALESCE($3, iva_porcentaje)
+          WHERE idproducto = $1
+          RETURNING
+            idproducto AS id,
+            nombre,
+            categoria,
+            precio_cliente::double precision AS precio,
+            precio::double precision AS precio_base,
+            stock::int AS stock,
+            imagen,
+            descripcion,
+            id_proveedor,
+            iva_porcentaje::double precision AS iva_porcentaje,
+            subida_porcentaje::double precision AS subida_porcentaje,
+            precio_cliente::double precision AS precio_cliente,
+            EXISTS (
+              SELECT 1
+              FROM public.pedidosproveedor AS pp
+              WHERE pp.producto_id = public.producto.idproducto
+                AND pp.estado = 'Pendiente'
+            ) AS pedidos,
+            estados;
+        `,
+        [id, subidaPorcentaje, ivaPorcentaje ?? null]
+      );
+
+      if (!rows[0]) {
+        return NextResponse.json({ ok: false, error: "Producto no encontrado" }, { status: 404 });
+      }
+
+      return NextResponse.json({ ok: true, data: rows[0] });
+    }
+
     const estadoPorAccion: Record<string, string> = {
       inactivar: "Inactivo",
       activar: "Disponible",
@@ -248,9 +317,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
-    let body: any;
+    let body: Record<string, unknown>;
     try {
-      body = await req.json();
+      body = (await req.json()) as Record<string, unknown>;
     } catch {
       return NextResponse.json(
         { ok: false, error: 'Cuerpo de la solicitud inválido' },
@@ -338,11 +407,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         idproducto AS id,
         nombre,
         categoria,
-        precio::double precision AS precio,
+        precio_cliente::double precision AS precio,
+        precio::double precision AS precio_base,
         stock::int AS stock,
         imagen,
         descripcion,
         id_proveedor,
+        iva_porcentaje::double precision AS iva_porcentaje,
+        subida_porcentaje::double precision AS subida_porcentaje,
+        precio_cliente::double precision AS precio_cliente,
         EXISTS (
           SELECT 1
           FROM public.pedidosproveedor AS pp

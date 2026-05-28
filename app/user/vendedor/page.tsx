@@ -8,7 +8,7 @@ import { OrderSummary } from "./Modal_Venta";
 import { PageHeader } from "./PageHeader";
 import { ProductSelector } from "./ProductSelector";
 import { PaymentLinkModal } from "./PaymentLinkModal";
-import type { CartItem, FeedbackState, InventorioProducto } from "./types";
+import type { CartItem, DomiciliarioOption, FeedbackState, InventorioProducto } from "./types";
 
 type CheckoutLinkData = {
   pedidoId: number;
@@ -16,6 +16,19 @@ type CheckoutLinkData = {
   cliente: string;
   total: number;
   checkoutUrl: string;
+};
+
+type UsuarioListado = {
+  id: number;
+  nombre: string;
+  apellido: string;
+};
+
+type DomiciliarioApi = {
+  idDomiciliario: number;
+  idUsuario: number;
+  estadoLaboral: string;
+  disponibilidadManual: string;
 };
 
 export default function Page() {
@@ -27,6 +40,10 @@ export default function Page() {
   const [deliveryType, setDeliveryType] = useState<"Domicilio" | "Retiro_tienda">("Domicilio");
   const [paymentType, setPaymentType] = useState("");
   const [pickupDateTime, setPickupDateTime] = useState("");
+  const [selectedDomiciliarioId, setSelectedDomiciliarioId] = useState("");
+  const [domiciliarios, setDomiciliarios] = useState<DomiciliarioOption[]>([]);
+  const [domiciliariosLoading, setDomiciliariosLoading] = useState(false);
+  const [domiciliariosError, setDomiciliariosError] = useState("");
   const [customerUserId, setCustomerUserId] = useState<number | null>(null);
   const [documentLookupLoading, setDocumentLookupLoading] = useState(false);
   const [documentLookupError, setDocumentLookupError] = useState("");
@@ -264,6 +281,70 @@ export default function Page() {
     }
   }, []);
 
+  const fetchDomiciliarios = useCallback(async (signal?: AbortSignal) => {
+    try {
+      setDomiciliariosLoading(true);
+      setDomiciliariosError("");
+
+      const [domiciliariosRes, usuariosRes] = await Promise.all([
+        fetch("/api/domiciliario", { cache: "no-store", signal }),
+        fetch("/api/usuarios", { cache: "no-store", signal }),
+      ]);
+
+      const [domiciliariosJson, usuariosJson] = await Promise.all([
+        domiciliariosRes.json().catch(() => ({})),
+        usuariosRes.json().catch(() => ({})),
+      ]);
+
+      if (!domiciliariosRes.ok || !domiciliariosJson?.ok) {
+        throw new Error(domiciliariosJson?.error ?? "No fue posible cargar los domiciliarios.");
+      }
+
+      if (!usuariosRes.ok || !usuariosJson?.ok) {
+        throw new Error(usuariosJson?.error ?? "No fue posible cargar los usuarios.");
+      }
+
+      const usuarios = Array.isArray(usuariosJson?.data)
+        ? (usuariosJson.data as UsuarioListado[])
+        : [];
+      const usuariosMap = new Map<number, UsuarioListado>(
+        usuarios.map((usuario) => [Number(usuario.id), usuario])
+      );
+
+      const rawDomiciliarios: DomiciliarioApi[] = Array.isArray(domiciliariosJson?.data)
+        ? domiciliariosJson.data
+        : [];
+
+      const parsed = rawDomiciliarios.map((domiciliario) => {
+        const usuario = usuariosMap.get(Number(domiciliario.idUsuario));
+        const nombreCompleto = [usuario?.nombre, usuario?.apellido]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+        return {
+          idDomiciliario: Number(domiciliario.idDomiciliario),
+          idUsuario: Number(domiciliario.idUsuario),
+          nombreCompleto: nombreCompleto || `Domiciliario #${domiciliario.idDomiciliario}`,
+          estadoLaboral: domiciliario.estadoLaboral,
+          disponibilidadManual: domiciliario.disponibilidadManual,
+        };
+      });
+
+      setDomiciliarios(parsed);
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        return;
+      }
+      setDomiciliarios([]);
+      setDomiciliariosError(
+        error instanceof Error ? error.message : "Error cargando domiciliarios."
+      );
+    } finally {
+      setDomiciliariosLoading(false);
+    }
+  }, []);
+
   const resetSaleForm = useCallback(() => {
     setCartItems([]);
     setQuantity(null);
@@ -274,6 +355,7 @@ export default function Page() {
     setCustomerAddress("");
     setPaymentType("");
     setPickupDateTime("");
+    setSelectedDomiciliarioId("");
     setCustomerUserId(null);
     setDocumentLookupError("");
     setDocumentLookupMessage("");
@@ -347,6 +429,28 @@ export default function Page() {
         setFeedback({
           type: "error",
           message: "La fecha y hora de retiro no puede ser anterior a la actual.",
+        });
+        return;
+      }
+    }
+
+    if (deliveryType === "Domicilio") {
+      const selectedDomiciliario = domiciliarios.find(
+        (domiciliario) => String(domiciliario.idDomiciliario) === selectedDomiciliarioId
+      );
+
+      if (!selectedDomiciliario) {
+        setFeedback({
+          type: "error",
+          message: "Selecciona un domiciliario disponible para asociar la entrega.",
+        });
+        return;
+      }
+
+      if (selectedDomiciliario.disponibilidadManual !== "Disponible") {
+        setFeedback({
+          type: "error",
+          message: "El domiciliario seleccionado no esta disponible.",
         });
         return;
       }
@@ -478,12 +582,14 @@ export default function Page() {
 
       const entregaPayload: Record<string, unknown> = {
         idPedido: Number(pedidoId),
+        idDomiciliario:
+          deliveryType === "Domicilio" ? Number(selectedDomiciliarioId) : null,
         ciudad: deliveryType === "Domicilio" ? customerCityValue : null,
         direccionEntrega: deliveryType === "Domicilio" ? customerAddressValue : null,
         telefonoContacto: customerPhoneValue,
         nombreRecibe: customerNameValue,
         costoEnvio: 0,
-        estadoEntrega: "Pendiente",
+        estadoEntrega: deliveryType === "Domicilio" ? "Asignada" : "Pendiente",
         observacion: paymentTypeLabel,
         fechaHoraRetiro:
           deliveryType === "Retiro_tienda" ? new Date(pickupDateTime).toISOString() : null,
@@ -716,6 +822,12 @@ export default function Page() {
   }, [fetchInventoryProducts]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    void fetchDomiciliarios(controller.signal);
+    return () => controller.abort();
+  }, [fetchDomiciliarios]);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (productSearchRef.current && !productSearchRef.current.contains(event.target as Node)) {
         setShowProductSuggestions(false);
@@ -813,6 +925,25 @@ export default function Page() {
   }, [deliveryType, pickupDateTime]);
 
   useEffect(() => {
+    if (deliveryType === "Retiro_tienda" && selectedDomiciliarioId) {
+      setSelectedDomiciliarioId("");
+    }
+  }, [deliveryType, selectedDomiciliarioId]);
+
+  useEffect(() => {
+    if (!selectedDomiciliarioId) {
+      return;
+    }
+
+    const selectedExists = domiciliarios.some(
+      (domiciliario) => String(domiciliario.idDomiciliario) === selectedDomiciliarioId
+    );
+    if (!selectedExists) {
+      setSelectedDomiciliarioId("");
+    }
+  }, [domiciliarios, selectedDomiciliarioId]);
+
+  useEffect(() => {
     const allowedPaymentTypes =
       deliveryType === "Retiro_tienda"
         ? new Set(["efectivo", "pago_online"])
@@ -901,6 +1032,10 @@ export default function Page() {
             paymentType={paymentType}
             pickupDateTime={pickupDateTime}
             pickupMinDateTime={pickupMinDateTime}
+            selectedDomiciliarioId={selectedDomiciliarioId}
+            domiciliarios={domiciliarios}
+            domiciliariosLoading={domiciliariosLoading}
+            domiciliariosError={domiciliariosError}
             totalAmount={totalAmount}
             registering={registering}
             vendedorError={vendedorError}
@@ -909,6 +1044,7 @@ export default function Page() {
             onDeliveryTypeChange={setDeliveryType}
             onPaymentTypeChange={setPaymentType}
             onPickupDateTimeChange={setPickupDateTime}
+            onDomiciliarioChange={setSelectedDomiciliarioId}
             onRegisterSale={registrarVenta}
           />
         </div>

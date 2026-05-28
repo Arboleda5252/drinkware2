@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FaSpinner, FaClipboardCheck, FaBan } from "react-icons/fa";
+import { FaSpinner, FaClipboardCheck, FaBan, FaSave } from "react-icons/fa";
 import { MdEventAvailable } from "react-icons/md";
 import Image from "next/image";
 
@@ -10,6 +10,10 @@ type Producto = {
   nombre: string;
   categoria: string | null;
   precio: number;
+  precio_base: number;
+  iva_porcentaje: number;
+  subida_porcentaje: number;
+  precio_cliente: number;
   stock: number;
   pedidos: boolean;
   estados: string | null;
@@ -83,6 +87,16 @@ export default function ProductsPage() {
   const [guardandoPedido, setGuardandoPedido] = React.useState(false);
   const [errorPedido, setErrorPedido] = React.useState<string | null>(null);
   const [exitoPedido, setExitoPedido] = React.useState<string | null>(null);
+  const [draftSubas, setDraftSubas] = React.useState<Record<number, string>>({});
+  const [guardandoSubaId, setGuardandoSubaId] = React.useState<number | null>(null);
+  const [errorSuba, setErrorSuba] = React.useState<string | null>(null);
+  const [exitoSuba, setExitoSuba] = React.useState<string | null>(null);
+  const [modalSubaCategoriaAbierto, setModalSubaCategoriaAbierto] = React.useState(false);
+  const [categoriaSuba, setCategoriaSuba] = React.useState("");
+  const [subaCategoriaValor, setSubaCategoriaValor] = React.useState("");
+  const [guardandoSubaCategoria, setGuardandoSubaCategoria] = React.useState(false);
+  const [errorSubaCategoria, setErrorSubaCategoria] = React.useState<string | null>(null);
+  const [exitoSubaCategoria, setExitoSubaCategoria] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelado = false;
@@ -110,6 +124,12 @@ export default function ProductsPage() {
     return ["Todas", ...Array.from(set).sort((a, b) => a.localeCompare(b, "es"))];
   }, [productos]);
 
+  React.useEffect(() => {
+    if (!categoriaSuba) {
+      setCategoriaSuba(categorias.find((categoria) => categoria !== "Todas") ?? "");
+    }
+  }, [categoriaSuba, categorias]);
+
   const filtrados = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     return productos
@@ -118,7 +138,7 @@ export default function ProductsPage() {
         const texto = [
           p.nombre ?? "",
           p.categoria ?? "Sin categoria",
-          String(p.precio ?? ""),
+          String(p.precio_base ?? ""),
           String(p.stock ?? ""),
         ]
           .join(" ")
@@ -299,8 +319,217 @@ export default function ProductsPage() {
     }
   };
 
+  const actualizarProductoEnEstado = React.useCallback((productoActualizado: Producto) => {
+    setProductos((prev) =>
+      prev.map((producto) =>
+        producto.id === productoActualizado.id ? { ...producto, ...productoActualizado } : producto
+      )
+    );
+    setProductoVer((prev) =>
+      prev?.id === productoActualizado.id ? { ...prev, ...productoActualizado } : prev
+    );
+  }, []);
+
+  const guardarSubaProducto = async (producto: Producto) => {
+    const rawValue = draftSubas[producto.id] ?? String(producto.subida_porcentaje ?? 0);
+    const subidaPorcentaje = Number(rawValue);
+
+    if (!Number.isFinite(subidaPorcentaje) || subidaPorcentaje < 0) {
+      setErrorSuba("La Ganancia debe ser un numero valido.");
+      setExitoSuba(null);
+      return;
+    }
+
+    setGuardandoSubaId(producto.id);
+    setErrorSuba(null);
+    setExitoSuba(null);
+
+    try {
+      const res = await fetch(`/api/productos/${producto.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accion: "actualizar_porcentajes",
+          suba: subidaPorcentaje,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok || !json?.data) {
+        throw new Error(json?.error ?? "No fue posible actualizar la Ganancia.");
+      }
+
+      actualizarProductoEnEstado(json.data as Producto);
+      setDraftSubas((prev) => ({ ...prev, [producto.id]: String(subidaPorcentaje) }));
+      setExitoSuba(`Ganancia actualizada para ${producto.nombre}.`);
+    } catch (error: unknown) {
+      setErrorSuba(getErrorMessage(error, "No fue posible actualizar la Ganancia."));
+    } finally {
+      setGuardandoSubaId(null);
+    }
+  };
+
+  const abrirModalSubaCategoria = () => {
+    setErrorSubaCategoria(null);
+    setExitoSubaCategoria(null);
+    setSubaCategoriaValor("");
+    setCategoriaSuba(categorias.find((categoria) => categoria !== "Todas") ?? "");
+    setModalSubaCategoriaAbierto(true);
+  };
+
+  const cerrarModalSubaCategoria = () => {
+    setModalSubaCategoriaAbierto(false);
+    setGuardandoSubaCategoria(false);
+    setErrorSubaCategoria(null);
+    setExitoSubaCategoria(null);
+  };
+
+  const guardarSubaPorCategoria = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const subidaPorcentaje = Number(subaCategoriaValor);
+    if (!categoriaSuba) {
+      setErrorSubaCategoria("Selecciona una categoria.");
+      setExitoSubaCategoria(null);
+      return;
+    }
+
+    if (!Number.isFinite(subidaPorcentaje) || subidaPorcentaje < 0) {
+      setErrorSubaCategoria("La Ganancia debe ser un numero valido.");
+      setExitoSubaCategoria(null);
+      return;
+    }
+
+    setGuardandoSubaCategoria(true);
+    setErrorSubaCategoria(null);
+    setExitoSubaCategoria(null);
+
+    try {
+      const res = await fetch("/api/productos", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accion: "actualizar_suba_categoria",
+          categoria: categoriaSuba,
+          suba: subidaPorcentaje,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok || !Array.isArray(json?.data)) {
+        throw new Error(json?.error ?? "No fue posible actualizar la Ganancia por categoria.");
+      }
+
+      const actualizados = new Map<number, Producto>(
+        (json.data as Producto[]).map((producto) => [producto.id, producto])
+      );
+
+      setProductos((prev) =>
+        prev.map((producto) => actualizados.get(producto.id) ?? producto)
+      );
+      setProductoVer((prev) => {
+        if (!prev) return prev;
+        const actualizado = actualizados.get(prev.id);
+        return actualizado ? { ...prev, ...actualizado } : prev;
+      });
+      setDraftSubas((prev) => {
+        const next = { ...prev };
+        actualizados.forEach((producto) => {
+          next[producto.id] = String(producto.subida_porcentaje ?? subidaPorcentaje);
+        });
+        return next;
+      });
+      setExitoSubaCategoria(
+        `Margen de Ganancia actualizada a ${subidaPorcentaje}% para ${json?.updated ?? actualizados.size} producto(s).`
+      );
+    } catch (error: unknown) {
+      setErrorSubaCategoria(
+        getErrorMessage(error, "No fue posible actualizar la Ganancia por categoria.")
+      );
+    } finally {
+      setGuardandoSubaCategoria(false);
+    }
+  };
+
   return (
     <main className="min-h-screen px-4 py-6 sm:px-6">
+      {modalSubaCategoriaAbierto && (
+        <div className={`${overlayClass} items-center`}>
+          <div className={`${modalClass} w-full max-w-md`}>
+            <button type="button" onClick={cerrarModalSubaCategoria} className={closeButtonClass}>
+              X
+            </button>
+
+            <h2 className="text-xl font-semibold text-white">Actualizar Margen de Ganancia por categoria</h2>
+            <p className="mt-2 text-sm text-white/70">
+              Aplica un mismo porcentaje de Ganancia a todos los productos de una categoria.
+            </p>
+
+            {errorSubaCategoria && (
+              <div className="mt-4 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {errorSubaCategoria}
+              </div>
+            )}
+
+            {exitoSubaCategoria && (
+              <div className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                {exitoSubaCategoria}
+              </div>
+            )}
+
+            <form onSubmit={guardarSubaPorCategoria} className="mt-5 space-y-4">
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white/80">Categoria</span>
+                <select
+                  value={categoriaSuba}
+                  onChange={(event) => setCategoriaSuba(event.target.value)}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-2.5 text-sm text-white outline-none [color-scheme:dark] focus:ring-2 focus:ring-sky-300/20"
+                >
+                  {categorias
+                    .filter((categoria) => categoria !== "Todas")
+                    .map((categoria) => (
+                      <option key={categoria} value={categoria} className="bg-slate-900 text-white">
+                        {categoria}
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-white/80">SUBA (%)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={subaCategoriaValor}
+                  onChange={(event) => setSubaCategoriaValor(event.target.value)}
+                  placeholder="0"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-sky-300/40 focus:bg-white/10 focus:ring-2 focus:ring-sky-300/20"
+                />
+              </label>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={cerrarModalSubaCategoria}
+                  className="rounded-2xl border border-white/10 px-4 py-2 text-sm font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardandoSubaCategoria}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:opacity-70"
+                >
+                  {guardandoSubaCategoria && <FaSpinner className="h-4 w-4 animate-spin" />}
+                  Guardar Margen de Ganancia
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {modalPedidoAbierto && productoPedido && (
         <div className={`${overlayClass} items-center`}>
           <div className={`${modalClass} w-full max-w-md`}>
@@ -396,7 +625,10 @@ export default function ProductsPage() {
                     <tr>
                       <th className="px-4 py-2 font-semibold">Producto</th>
                       <th className="px-4 py-2 font-semibold">Categoria</th>
-                      <th className="px-4 py-2 font-semibold">Precio</th>
+                      <th className="px-4 py-2 font-semibold">Precio base</th>
+                      <th className="px-4 py-2 font-semibold">IVA</th>
+                      <th className="px-4 py-2 font-semibold">Margen de Ganancia</th>
+                      <th className="px-4 py-2 font-semibold">Precio cliente</th>
                       <th className="px-4 py-2 font-semibold">Stock</th>
                       <th className="px-4 py-2 font-semibold">Descripcion</th>
                       <th className="px-4 py-2 font-semibold">Imagen</th>
@@ -408,7 +640,37 @@ export default function ProductsPage() {
                       <tr key={p.id} className="transition hover:bg-white/5">
                         <td className="px-4 py-2 text-center">{p.nombre}</td>
                         <td className="px-4 py-2">{p.categoria ?? "Sin categoria"}</td>
-                        <td className="px-4 py-2">{MONEDA.format(p.precio)}</td>
+                        <td className="px-4 py-2">{MONEDA.format(p.precio_base)}</td>
+                        <td className="px-4 py-2">{p.iva_porcentaje}%</td>
+                        <td className="px-4 py-2">
+                          <div className="flex min-w-[150px] items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={draftSubas[p.id] ?? String(p.subida_porcentaje ?? 0)}
+                              onChange={(event) =>
+                                setDraftSubas((prev) => ({ ...prev, [p.id]: event.target.value }))
+                              }
+                              className="w-20 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-xs text-white outline-none focus:border-sky-300/40"
+                            />
+                            <span className="text-xs text-white/55">%</span>
+                            <button
+                              type="button"
+                              onClick={() => guardarSubaProducto(p)}
+                              disabled={guardandoSubaId === p.id}
+                              className="inline-flex items-center justify-center rounded-xl border border-emerald-300/30 bg-emerald-400 px-2 py-1 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
+                              title="Guardar Margen de Ganancia"
+                            >
+                              {guardandoSubaId === p.id ? (
+                                <FaSpinner className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <FaSave className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">{MONEDA.format(p.precio_cliente)}</td>
                         <td className="px-4 py-2">{p.stock}</td>
                         <td className="max-w-[220px] px-4 py-2 text-xs text-white/60">
                           {p.descripcion ? (
@@ -482,7 +744,10 @@ export default function ProductsPage() {
                     <tr>
                       <th className="px-4 py-2 font-semibold">Producto</th>
                       <th className="px-4 py-2 font-semibold">Categoria</th>
-                      <th className="px-4 py-2 font-semibold">Precio</th>
+                      <th className="px-4 py-2 font-semibold">Precio base</th>
+                      <th className="px-4 py-2 font-semibold">IVA</th>
+                      <th className="px-4 py-2 font-semibold">Margen de Ganancia</th>
+                      <th className="px-4 py-2 font-semibold">Precio cliente</th>
                       <th className="px-4 py-2 font-semibold">Stock</th>
                       <th className="px-4 py-2 font-semibold">Estado</th>
                       <th className="px-4 py-2 text-right font-semibold">Acciones</th>
@@ -493,7 +758,37 @@ export default function ProductsPage() {
                       <tr key={p.id} className="transition hover:bg-white/5">
                         <td className="px-4 py-2">{p.nombre}</td>
                         <td className="px-4 py-2">{p.categoria ?? "Sin categoria"}</td>
-                        <td className="px-4 py-2">{MONEDA.format(p.precio)}</td>
+                        <td className="px-4 py-2">{MONEDA.format(p.precio_base)}</td>
+                        <td className="px-4 py-2">{p.iva_porcentaje}%</td>
+                        <td className="px-4 py-2">
+                          <div className="flex min-w-[150px] items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={draftSubas[p.id] ?? String(p.subida_porcentaje ?? 0)}
+                              onChange={(event) =>
+                                setDraftSubas((prev) => ({ ...prev, [p.id]: event.target.value }))
+                              }
+                              className="w-20 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-xs text-white outline-none focus:border-sky-300/40"
+                            />
+                            <span className="text-xs text-white/55">%</span>
+                            <button
+                              type="button"
+                              onClick={() => guardarSubaProducto(p)}
+                              disabled={guardandoSubaId === p.id}
+                              className="inline-flex items-center justify-center rounded-xl border border-emerald-300/30 bg-emerald-400 px-2 py-1 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
+                              title="Guardar Margen de Ganancia"
+                            >
+                              {guardandoSubaId === p.id ? (
+                                <FaSpinner className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <FaSave className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">{MONEDA.format(p.precio_cliente)}</td>
                         <td className="px-4 py-2">{p.stock}</td>
                         <td className="px-4 py-2 text-white/60">{p.estados ?? "Sin estado"}</td>
                         <td className="px-4 py-2 text-right">
@@ -535,7 +830,16 @@ export default function ProductsPage() {
                     <span className="font-semibold text-white">Categoria:</span> {productoVer.categoria ?? "-"}
                   </div>
                   <div>
-                    <span className="font-semibold text-white">Precio:</span> {MONEDA.format(productoVer.precio)}
+                    <span className="font-semibold text-white">Precio base:</span> {MONEDA.format(productoVer.precio_base)}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-white">IVA:</span> {productoVer.iva_porcentaje}%
+                  </div>
+                  <div>
+                    <span className="font-semibold text-white">Margen de Ganancia:</span> {productoVer.subida_porcentaje}%
+                  </div>
+                  <div>
+                    <span className="font-semibold text-white">Precio cliente:</span> {MONEDA.format(productoVer.precio_cliente)}
                   </div>
                   <div>
                     <span className="font-semibold text-white">Stock:</span> {productoVer.stock}
@@ -635,12 +939,16 @@ export default function ProductsPage() {
         <header className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-200">Inventario</p>
           <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Gestion de productos</h1>
-          <p className="mt-4 max-w-3xl text-sm leading-7 text-white/75 sm:text-base">
-            Supervisa disponibilidad, revisa el catalogo y gestiona pedidos de reposicion sin alterar el flujo operativo.
-          </p>
         </header>
 
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={abrirModalSubaCategoria}
+            className="inline-flex items-center justify-center rounded-full border border-amber-300/30 bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 shadow-[0_12px_30px_rgba(245,158,11,0.22)] transition hover:bg-amber-200"
+          >
+            Ajustar Margen de Ganancia por categoria
+          </button>
           <button
             type="button"
             onClick={abrirModalNoDisponibles}
@@ -665,7 +973,7 @@ export default function ProductsPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, categoria, precio, stock..."
+              placeholder="Buscar por nombre, categoria, precio base, stock..."
               className="w-full rounded-2xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white shadow-sm outline-none ring-0 placeholder:text-white/35 focus:border-sky-300/40 focus:bg-white/10 focus:ring-2 focus:ring-sky-300/20"
             />
           </div>
@@ -683,6 +991,18 @@ export default function ProductsPage() {
           </select>
         </div>
 
+        {(errorSuba || exitoSuba) && (
+          <div
+            className={`rounded-2xl border px-4 py-3 text-sm ${
+              errorSuba
+                ? "border-rose-400/30 bg-rose-500/10 text-rose-100"
+                : "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+            }`}
+          >
+            {errorSuba ?? exitoSuba}
+          </div>
+        )}
+
         <div className={panelClass}>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -690,7 +1010,10 @@ export default function ProductsPage() {
                 <tr>
                   <th className="px-6 py-3 font-semibold">Producto</th>
                   <th className="px-6 py-3 font-semibold">Categoria</th>
-                  <th className="px-6 py-3 font-semibold">Precio</th>
+                  <th className="px-6 py-3 font-semibold">Precio base</th>
+                  <th className="px-6 py-3 font-semibold">IVA</th>
+                  <th className="px-6 py-3 font-semibold">Margen de Ganancia</th>
+                  <th className="px-6 py-3 font-semibold">Precio cliente</th>
                   <th className="px-6 py-3 font-semibold">Stock</th>
                   <th className="px-6 py-3 font-semibold">Estado</th>
                   <th className="px-6 py-3 text-center font-semibold">Acciones</th>
@@ -699,7 +1022,7 @@ export default function ProductsPage() {
               <tbody className="divide-y divide-white/10 text-white/85">
                 {cargando && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-white/60">
+                    <td colSpan={9} className="px-6 py-10 text-center text-white/60">
                       <div className="flex items-center justify-center gap-2">
                         <FaSpinner className="animate-spin text-xl text-white/60" />
                         <span>Cargando...</span>
@@ -710,7 +1033,7 @@ export default function ProductsPage() {
 
                 {!cargando && error && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-rose-200">
+                    <td colSpan={9} className="px-6 py-10 text-center text-rose-200">
                       {error}
                     </td>
                   </tr>
@@ -737,7 +1060,37 @@ export default function ProductsPage() {
                       <tr key={p.id} className="transition hover:bg-white/5">
                         <td className="px-6 py-3">{p.nombre}</td>
                         <td className="px-6 py-3">{p.categoria ?? "Sin categoria"}</td>
-                        <td className="px-6 py-3">{MONEDA.format(p.precio)}</td>
+                        <td className="px-6 py-3">{MONEDA.format(p.precio_base)}</td>
+                        <td className="px-6 py-3">{p.iva_porcentaje}%</td>
+                        <td className="px-6 py-3">
+                          <div className="flex min-w-[150px] items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={draftSubas[p.id] ?? String(p.subida_porcentaje ?? 0)}
+                              onChange={(event) =>
+                                setDraftSubas((prev) => ({ ...prev, [p.id]: event.target.value }))
+                              }
+                              className="w-20 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-xs text-white outline-none focus:border-sky-300/40"
+                            />
+                            <span className="text-xs text-white/55">%</span>
+                            <button
+                              type="button"
+                              onClick={() => guardarSubaProducto(p)}
+                              disabled={guardandoSubaId === p.id}
+                              className="inline-flex items-center justify-center rounded-xl border border-emerald-300/30 bg-emerald-400 px-2 py-1 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
+                              title="Guardar Margen de Ganancia"
+                            >
+                              {guardandoSubaId === p.id ? (
+                                <FaSpinner className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <FaSave className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-6 py-3">{MONEDA.format(p.precio_cliente)}</td>
                         <td className="px-6 py-3">{p.stock}</td>
                         <td className="px-6 py-3">
                           <span
@@ -792,7 +1145,7 @@ export default function ProductsPage() {
 
                 {!cargando && !error && filtrados.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-white/55">
+                    <td colSpan={9} className="px-6 py-10 text-center text-white/55">
                       No hay productos para &quot;{query}&quot;.
                     </td>
                   </tr>

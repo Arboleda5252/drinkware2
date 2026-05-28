@@ -1,4 +1,4 @@
-import type { CartItem, FeedbackState } from "./types";
+import type { CartItem, DomiciliarioOption, FeedbackState } from "./types";
 
 type DetalleItem = CartItem & {
   name: string;
@@ -13,6 +13,10 @@ type OrderSummaryProps = {
   paymentType: string;
   pickupDateTime: string;
   pickupMinDateTime: string;
+  selectedDomiciliarioId: string;
+  domiciliarios: DomiciliarioOption[];
+  domiciliariosLoading: boolean;
+  domiciliariosError: string;
   totalAmount: number;
   registering: boolean;
   vendedorError: string;
@@ -21,6 +25,7 @@ type OrderSummaryProps = {
   onDeliveryTypeChange: (value: "Domicilio" | "Retiro_tienda") => void;
   onPaymentTypeChange: (value: string) => void;
   onPickupDateTimeChange: (value: string) => void;
+  onDomiciliarioChange: (value: string) => void;
   onRegisterSale: () => void;
 };
 
@@ -31,6 +36,10 @@ export function OrderSummary({
   paymentType,
   pickupDateTime,
   pickupMinDateTime,
+  selectedDomiciliarioId,
+  domiciliarios,
+  domiciliariosLoading,
+  domiciliariosError,
   totalAmount,
   registering,
   vendedorError,
@@ -39,6 +48,7 @@ export function OrderSummary({
   onDeliveryTypeChange,
   onPaymentTypeChange,
   onPickupDateTimeChange,
+  onDomiciliarioChange,
   onRegisterSale,
 }: OrderSummaryProps) {
   const paymentOptions =
@@ -147,15 +157,35 @@ export function OrderSummary({
                 <label className="flex flex-col text-sm font-medium text-slate-600">
                   Domiciliario
                   <select
-                    defaultValue=""
+                    value={selectedDomiciliarioId}
+                    onChange={(event) => onDomiciliarioChange(event.target.value)}
+                    disabled={domiciliariosLoading || domiciliarios.length === 0}
                     className="mt-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                   >
                     <option value="" disabled>
-                      Selecciona un domiciliario
+                      {domiciliariosLoading
+                        ? "Cargando domiciliarios..."
+                        : domiciliarios.length === 0
+                          ? "Sin domiciliarios disponibles"
+                          : "Selecciona un domiciliario"}
                     </option>
-                    <option value="dom-1">Domiciliario 1</option>
-                    <option value="dom-2">Domiciliario 2</option>
+                    {domiciliarios.map((domiciliario) => (
+                      <option
+                        key={domiciliario.idDomiciliario}
+                        value={domiciliario.idDomiciliario}
+                        disabled={domiciliario.disponibilidadManual !== "Disponible"}
+                      >
+                        {domiciliario.nombreCompleto} - {domiciliario.disponibilidadManual}
+                      </option>
+                    ))}
                   </select>
+                  {domiciliariosError ? (
+                    <span className="mt-1 text-xs text-rose-600">{domiciliariosError}</span>
+                  ) : (
+                    <span className="mt-1 text-xs text-slate-500">
+                      Solo se pueden seleccionar domiciliarios disponibles.
+                    </span>
+                  )}
                 </label>
               ) : (
                 <label className="flex flex-col text-sm font-medium text-slate-600">
