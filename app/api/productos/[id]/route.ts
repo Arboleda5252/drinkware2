@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/app/Datalibs/database';
+import { logStockMovement } from '@/app/Datalibs/inventoryMovements';
 
 export const runtime = 'nodejs';
 
@@ -18,6 +19,12 @@ type ProductoDetalle = {
   iva_porcentaje?: number;
   subida_porcentaje?: number;
   precio_cliente?: number;
+  unidades_vendidas?: number;
+  ventas_total?: number;
+  dias_sin_movimiento?: number;
+  valor_inventario?: number;
+  estado_stock?: string;
+  rotacion?: string;
 };
 
 // GET
@@ -28,6 +35,15 @@ export async function GET(
   try {
     const { id: routeId } = await params;
     const { rows } = await sql<ProductoDetalle>(`
+      WITH ventas AS (
+        SELECT
+          id_producto,
+          SUM(cantidad)::double precision AS unidades_vendidas,
+          SUM(subtotal)::double precision AS ventas_total,
+          MAX(fechapago) AS ultima_venta
+        FROM public.detallepedido
+        GROUP BY id_producto
+      )
       SELECT
         p.idproducto AS id,
         p.nombre,
@@ -47,8 +63,27 @@ export async function GET(
           WHERE pp.producto_id = p.idproducto
             AND pp.estado = 'Pendiente'
         ) AS pedidos,
-        p.estados
+        p.estados,
+        COALESCE(v.unidades_vendidas, 0)::double precision AS unidades_vendidas,
+        COALESCE(v.ventas_total, 0)::double precision AS ventas_total,
+        COALESCE(
+          FLOOR(EXTRACT(EPOCH FROM (NOW() - v.ultima_venta)) / 86400),
+          999
+        )::int AS dias_sin_movimiento,
+        (p.stock * p.precio_cliente)::double precision AS valor_inventario,
+        CASE
+          WHEN p.stock <= 5 THEN 'critico'
+          WHEN p.stock <= 20 THEN 'alerta'
+          WHEN p.stock >= 100 THEN 'sobrestock'
+          ELSE 'saludable'
+        END AS estado_stock,
+        CASE
+          WHEN COALESCE(v.unidades_vendidas, 0) >= 50 THEN 'alta'
+          WHEN COALESCE(v.unidades_vendidas, 0) >= 10 THEN 'media'
+          ELSE 'baja'
+        END AS rotacion
       FROM public.producto AS p
+      LEFT JOIN ventas AS v ON v.id_producto = p.idproducto
       WHERE p.idproducto = $1
       LIMIT 1;
     `, [Number(routeId)]);
@@ -145,6 +180,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           { status: 409 }
         );
       }
+
+      await logStockMovement({
+        productoId: id,
+        stockAnterior: rows[0].stock - delta,
+        stockNuevo: rows[0].stock,
+        referencia: "Ajuste manual de stock",
+      });
 
       return NextResponse.json({ ok: true, data: { stock: rows[0].stock } });
     }
@@ -391,6 +433,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     }
 
+    const { rows: stockAnteriorRows } = await sql<{ stock: number }>(
+      `
+        SELECT stock::int AS stock
+        FROM public.producto
+        WHERE idproducto = $1
+        LIMIT 1;
+      `,
+      [id]
+    );
+
     const { rows } = await sql<ProductoDetalle>(`
       UPDATE public.producto
       SET
@@ -440,6 +492,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         { ok: false, error: 'Producto no encontrado' },
         { status: 404 }
       );
+    }
+
+    const stockAnterior = stockAnteriorRows[0]?.stock;
+    if (typeof stockAnterior === "number") {
+      await logStockMovement({
+        productoId: id,
+        stockAnterior,
+        stockNuevo: rows[0].stock,
+        referencia: "Edicion manual de producto",
+      });
     }
 
     return NextResponse.json({ ok: true, data: rows[0] });

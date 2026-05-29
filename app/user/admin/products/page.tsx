@@ -19,6 +19,12 @@ type Producto = {
   estados: string | null;
   descripcion?: string | null;
   imagen?: string | null;
+  unidades_vendidas: number;
+  ventas_total: number;
+  dias_sin_movimiento: number;
+  valor_inventario: number;
+  estado_stock: "saludable" | "alerta" | "critico" | "sobrestock";
+  rotacion: "alta" | "media" | "baja";
 };
 
 type ProductoDetalle = Producto & {
@@ -60,13 +66,48 @@ const panelClass =
 const actionButtonClass =
   "rounded-xl border border-white/10 bg-white/5 p-2 text-white/80 transition hover:border-sky-300/30 hover:bg-white/10 hover:text-white disabled:opacity-50";
 
+const estadoInventarioLabels: Record<Producto["estado_stock"], string> = {
+  saludable: "Saludable",
+  alerta: "Alerta",
+  critico: "Critico",
+  sobrestock: "Sobrestock",
+};
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function EstadoInventarioBadge({ estado }: { estado: Producto["estado_stock"] }) {
+  const color =
+    estado === "saludable"
+      ? "bg-emerald-500/10 text-emerald-100 ring-emerald-400/20"
+      : estado === "alerta"
+        ? "bg-amber-500/10 text-amber-100 ring-amber-400/20"
+        : estado === "critico"
+          ? "bg-rose-500/10 text-rose-100 ring-rose-400/20"
+          : "bg-sky-500/10 text-sky-100 ring-sky-400/20";
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${color}`}>
+      {estadoInventarioLabels[estado]}
+    </span>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3">
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="mt-1 font-semibold text-white">{value}</p>
+    </div>
+  );
 }
 
 export default function ProductsPage() {
   const [query, setQuery] = React.useState("");
   const [filtroCategoria, setFiltroCategoria] = React.useState<string>("Todas");
+  const [filtroEstadoInventario, setFiltroEstadoInventario] = React.useState<string>("Todos");
+  const [filtroRotacion, setFiltroRotacion] = React.useState<string>("Todas");
   const [productos, setProductos] = React.useState<Producto[]>([]);
   const [cargando, setCargando] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -139,15 +180,25 @@ export default function ProductsPage() {
           p.nombre ?? "",
           p.categoria ?? "Sin categoria",
           String(p.precio_base ?? ""),
+          String(p.precio_cliente ?? ""),
           String(p.stock ?? ""),
+          String(p.iva_porcentaje ?? ""),
+          String(p.subida_porcentaje ?? ""),
+          String(p.unidades_vendidas ?? ""),
+          String(p.ventas_total ?? ""),
+          p.estado_stock ?? "",
+          p.rotacion ?? "",
         ]
           .join(" ")
           .toLowerCase();
         const coincideTexto = q ? texto.includes(q) : true;
         const coincideCat = filtroCategoria === "Todas" ? true : (p.categoria ?? "Sin categoria") === filtroCategoria;
-        return coincideTexto && coincideCat;
+        const coincideEstadoInventario =
+          filtroEstadoInventario === "Todos" ? true : p.estado_stock === filtroEstadoInventario;
+        const coincideRotacion = filtroRotacion === "Todas" ? true : p.rotacion === filtroRotacion;
+        return coincideTexto && coincideCat && coincideEstadoInventario && coincideRotacion;
       });
-  }, [productos, query, filtroCategoria]);
+  }, [productos, query, filtroCategoria, filtroEstadoInventario, filtroRotacion]);
 
   const inactivos = React.useMemo(
     () => productos.filter((p) => (p.estados ?? "").toLowerCase() === "inactivo"),
@@ -745,9 +796,6 @@ export default function ProductsPage() {
                       <th className="px-4 py-2 font-semibold">Producto</th>
                       <th className="px-4 py-2 font-semibold">Categoria</th>
                       <th className="px-4 py-2 font-semibold">Precio base</th>
-                      <th className="px-4 py-2 font-semibold">IVA</th>
-                      <th className="px-4 py-2 font-semibold">Margen de Ganancia</th>
-                      <th className="px-4 py-2 font-semibold">Precio cliente</th>
                       <th className="px-4 py-2 font-semibold">Stock</th>
                       <th className="px-4 py-2 font-semibold">Estado</th>
                       <th className="px-4 py-2 text-right font-semibold">Acciones</th>
@@ -759,36 +807,6 @@ export default function ProductsPage() {
                         <td className="px-4 py-2">{p.nombre}</td>
                         <td className="px-4 py-2">{p.categoria ?? "Sin categoria"}</td>
                         <td className="px-4 py-2">{MONEDA.format(p.precio_base)}</td>
-                        <td className="px-4 py-2">{p.iva_porcentaje}%</td>
-                        <td className="px-4 py-2">
-                          <div className="flex min-w-[150px] items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={draftSubas[p.id] ?? String(p.subida_porcentaje ?? 0)}
-                              onChange={(event) =>
-                                setDraftSubas((prev) => ({ ...prev, [p.id]: event.target.value }))
-                              }
-                              className="w-20 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-xs text-white outline-none focus:border-sky-300/40"
-                            />
-                            <span className="text-xs text-white/55">%</span>
-                            <button
-                              type="button"
-                              onClick={() => guardarSubaProducto(p)}
-                              disabled={guardandoSubaId === p.id}
-                              className="inline-flex items-center justify-center rounded-xl border border-emerald-300/30 bg-emerald-400 px-2 py-1 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
-                              title="Guardar Margen de Ganancia"
-                            >
-                              {guardandoSubaId === p.id ? (
-                                <FaSpinner className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <FaSave className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2">{MONEDA.format(p.precio_cliente)}</td>
                         <td className="px-4 py-2">{p.stock}</td>
                         <td className="px-4 py-2 text-white/60">{p.estados ?? "Sin estado"}</td>
                         <td className="px-4 py-2 text-right">
@@ -818,62 +836,97 @@ export default function ProductsPage() {
 
       {modalVerAbierto && (
         <div className={`${overlayClass} items-center`}>
-          <div className={`${modalClass} min-w-[320px] max-w-xs`}>
-            <button onClick={cerrarModalVer} className="absolute right-4 top-4 text-white/45 transition hover:text-white">
+          <div className="relative w-full max-w-4xl rounded-[2rem] border border-sky-400/20 bg-slate-950 p-6 shadow-[0_30px_90px_rgba(2,8,23,0.65)]">
+            <button onClick={cerrarModalVer} className="absolute right-5 top-5 rounded-full border border-sky-400/20 bg-slate-900 px-3 py-1 text-sm font-semibold text-sky-100/70 transition hover:border-sky-300/50 hover:text-white">
               X
             </button>
             {productoVer ? (
-              <>
-                <h2 className="mb-4 text-lg font-bold text-white">Producto: {productoVer.nombre}</h2>
-                <div className="space-y-2 text-sm text-white/75">
-                  <div>
-                    <span className="font-semibold text-white">Categoria:</span> {productoVer.categoria ?? "-"}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white">Precio base:</span> {MONEDA.format(productoVer.precio_base)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white">IVA:</span> {productoVer.iva_porcentaje}%
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white">Margen de Ganancia:</span> {productoVer.subida_porcentaje}%
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white">Precio cliente:</span> {MONEDA.format(productoVer.precio_cliente)}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white">Stock:</span> {productoVer.stock}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white">Estado:</span>{" "}
-                    {(productoVer.estados ?? "").toLowerCase() === "inactivo"
-                      ? "Inactivo"
-                      : productoVer.stock > 0
-                        ? "Disponible"
-                        : "Agotado"}
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white">Descripcion:</span> {productoVer.descripcion ?? "-"}
-                  </div>
-                  {productoVer.id_proveedor != null && (
-                    <div>
-                      <span className="font-semibold text-white">Proveedor ID:</span> {productoVer.id_proveedor}
+              <div className="grid gap-6 md:grid-cols-[0.9fr_1.1fr]">
+                <aside className="space-y-4">
+                  <div className="rounded-3xl border border-sky-400/20 bg-slate-900/80 p-4">
+                    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-slate-950/80">
+                      {productoVer.imagen ? (
+                        <Image
+                          src={productoVer.imagen}
+                          alt={productoVer.nombre}
+                          fill
+                          className="object-contain p-3"
+                          sizes="(max-width: 768px) 100vw, 360px"
+                          priority
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                          Sin imagen
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {productoVer.imagen && (
-                    <div className="relative mt-2 aspect-[4/3] w-full">
-                      <Image
-                        src={productoVer.imagen}
-                        alt={productoVer.nombre}
-                        fill
-                        className="rounded-lg object-contain"
-                        sizes="(max-width: 768px) 100vw, 600px"
-                        priority
-                      />
+                  </div>
+
+                  <div className="rounded-3xl border border-sky-400/20 bg-slate-900/80 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300/80">
+                      Inventario
+                    </p>
+                    <div className="mt-4 grid gap-3">
+                      <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3">
+                        <p className="text-xs text-slate-400">Ventas</p>
+                        <p className="mt-1 text-lg font-bold text-white">
+                          {(productoVer.unidades_vendidas ?? 0).toLocaleString("es-CO")}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3">
+                        <p className="text-xs text-slate-400">Valor inventario</p>
+                        <p className="mt-1 text-lg font-bold text-sky-100">
+                          {MONEDA.format(productoVer.valor_inventario ?? 0)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3">
+                        <p className="text-xs text-slate-400">Estado inventario</p>
+                        <div className="mt-2">
+                          <EstadoInventarioBadge estado={productoVer.estado_stock ?? "saludable"} />
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </>
+                  </div>
+                </aside>
+
+                <section className="rounded-3xl border border-sky-400/20 bg-slate-900/80 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-300/80">
+                    Producto
+                  </p>
+                  <h2 className="mt-2 pr-10 text-2xl font-bold text-white">{productoVer.nombre}</h2>
+
+                  <div className="mt-5 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+                    <DetailItem label="Categoria" value={productoVer.categoria ?? "-"} />
+                    <DetailItem label="Precio base" value={MONEDA.format(productoVer.precio_base)} />
+                    <DetailItem label="IVA" value={`${productoVer.iva_porcentaje}%`} />
+                    <DetailItem label="Margen de Ganancia" value={`${productoVer.subida_porcentaje}%`} />
+                    <DetailItem label="Precio cliente" value={MONEDA.format(productoVer.precio_cliente)} />
+                    <DetailItem label="Stock" value={String(productoVer.stock)} />
+                    <DetailItem
+                      label="Estado"
+                      value={
+                        (productoVer.estados ?? "").toLowerCase() === "inactivo"
+                          ? "Inactivo"
+                          : productoVer.stock > 0
+                            ? "Disponible"
+                            : "Agotado"
+                      }
+                    />
+                    {productoVer.id_proveedor != null && (
+                      <DetailItem label="Proveedor ID" value={String(productoVer.id_proveedor)} />
+                    )}
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/60 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      Descripcion
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-200">
+                      {productoVer.descripcion ?? "-"}
+                    </p>
+                  </div>
+                </section>
+              </div>
             ) : (
               <div className="p-8 text-center">
                 <div className="flex items-center justify-center gap-2">
@@ -935,7 +988,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-6xl space-y-8">
+      <div className="mx-auto w-full max-w-[96rem] space-y-8">
         <header className="rounded-[2rem] border border-white/10 bg-white/10 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md sm:p-8">
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-sky-200">Inventario</p>
           <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Gestion de productos</h1>
@@ -965,31 +1018,61 @@ export default function ProductsPage() {
           </button>
         </div>
 
-        <div className={`${panelClass} flex flex-col gap-3 p-4 sm:flex-row sm:items-center`}>
-          <div className="relative flex-1">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/45">
-              <Search />
-            </span>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, categoria, precio base, stock..."
-              className="w-full rounded-2xl border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white shadow-sm outline-none ring-0 placeholder:text-white/35 focus:border-sky-300/40 focus:bg-white/10 focus:ring-2 focus:ring-sky-300/20"
-            />
+        <section className="rounded-3xl border border-sky-400/20 bg-slate-900/90 p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <MdEventAvailable className="h-6 w-6 text-sky-400" />
+            <h2 className="text-xl font-bold text-white">Productos ({filtrados.length.toLocaleString("es-CO")})</h2>
           </div>
 
-          <select
-            value={filtroCategoria}
-            onChange={(e) => setFiltroCategoria(e.target.value)}
-            className="rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-2.5 text-sm text-white shadow-sm outline-none [color-scheme:dark] focus:ring-2 focus:ring-sky-300/20"
-          >
-            {categorias.map((c) => (
-              <option key={c} value={c} className="bg-slate-900 text-white">
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                <Search />
+              </span>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar ..."
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-10 pr-3 text-sm text-white placeholder-slate-400 outline-none focus:border-sky-400"
+              />
+            </div>
+
+            <select
+              value={filtroCategoria}
+              onChange={(e) => setFiltroCategoria(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none [color-scheme:dark] focus:border-sky-400"
+            >
+              {categorias.map((c) => (
+                <option key={c} value={c} className="bg-slate-900 text-white">
+                  {c === "Todas" ? "Todas las categorias" : c}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filtroEstadoInventario}
+              onChange={(e) => setFiltroEstadoInventario(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none [color-scheme:dark] focus:border-sky-400"
+            >
+              <option value="Todos" className="bg-slate-900 text-white">Todos los estados</option>
+              <option value="saludable" className="bg-slate-900 text-white">Saludable</option>
+              <option value="alerta" className="bg-slate-900 text-white">Alerta</option>
+              <option value="critico" className="bg-slate-900 text-white">Critico</option>
+              <option value="sobrestock" className="bg-slate-900 text-white">Sobrestock</option>
+            </select>
+
+            <select
+              value={filtroRotacion}
+              onChange={(e) => setFiltroRotacion(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none [color-scheme:dark] focus:border-sky-400"
+            >
+              <option value="Todas" className="bg-slate-900 text-white">Todas las rotaciones</option>
+              <option value="alta" className="bg-slate-900 text-white">Alta</option>
+              <option value="media" className="bg-slate-900 text-white">Media</option>
+              <option value="baja" className="bg-slate-900 text-white">Baja</option>
+            </select>
+          </div>
+        </section>
 
         {(errorSuba || exitoSuba) && (
           <div
@@ -1004,25 +1087,24 @@ export default function ProductsPage() {
         )}
 
         <div className={panelClass}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-white/5 text-left text-white/65">
+          <div className="overflow-hidden">
+            <table className="w-full table-fixed text-xs xl:text-sm">
+              <thead className="bg-white/5 text-center text-white/65">
                 <tr>
-                  <th className="px-6 py-3 font-semibold">Producto</th>
-                  <th className="px-6 py-3 font-semibold">Categoria</th>
-                  <th className="px-6 py-3 font-semibold">Precio base</th>
-                  <th className="px-6 py-3 font-semibold">IVA</th>
-                  <th className="px-6 py-3 font-semibold">Margen de Ganancia</th>
-                  <th className="px-6 py-3 font-semibold">Precio cliente</th>
-                  <th className="px-6 py-3 font-semibold">Stock</th>
-                  <th className="px-6 py-3 font-semibold">Estado</th>
-                  <th className="px-6 py-3 text-center font-semibold">Acciones</th>
+                  <th className="w-[26%] px-3 py-3 text-center font-semibold xl:px-4">Producto</th>
+                  <th className="w-[14%] px-3 py-3 text-center font-semibold xl:px-4">Categoria</th>
+                  <th className="w-[12%] px-3 py-3 text-center font-semibold xl:px-4">Precio base</th>
+                  <th className="w-[7%] px-3 py-3 text-center font-semibold xl:px-4">IVA</th>
+                  <th className="w-[13%] px-3 py-3 text-center font-semibold xl:px-4">Margen</th>
+                  <th className="w-[12%] px-3 py-3 text-center font-semibold xl:px-4">Precio cliente</th>
+                  <th className="w-[7%] px-3 py-3 text-center font-semibold xl:px-4">Stock</th>
+                  <th className="w-[13%] px-3 py-3 text-center font-semibold xl:px-4">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10 text-white/85">
                 {cargando && (
                   <tr>
-                    <td colSpan={9} className="px-6 py-10 text-center text-white/60">
+                    <td colSpan={8} className="px-6 py-10 text-center text-white/60">
                       <div className="flex items-center justify-center gap-2">
                         <FaSpinner className="animate-spin text-xl text-white/60" />
                         <span>Cargando...</span>
@@ -1033,7 +1115,7 @@ export default function ProductsPage() {
 
                 {!cargando && error && (
                   <tr>
-                    <td colSpan={9} className="px-6 py-10 text-center text-rose-200">
+                    <td colSpan={8} className="px-6 py-10 text-center text-rose-200">
                       {error}
                     </td>
                   </tr>
@@ -1044,62 +1126,26 @@ export default function ProductsPage() {
                   filtrados.map((p) => {
                     const estado = (p.estados ?? "").toLowerCase();
                     const esDisponible = estado === "disponible";
-                    const esInactivo = estado === "inactivo";
-                    const esNoDisponible = estado === "no disponible";
                     const esAgotado = (p.stock ?? 0) <= 0;
-                    const estadoTexto = esAgotado ? "Agotado" : (p.estados ?? "Sin estado");
-                    const estadoClass = esInactivo
-                      ? "bg-white/10 text-white/55 ring-white/10"
-                      : esNoDisponible
-                        ? "bg-amber-500/10 text-amber-100 ring-amber-400/20"
-                        : esAgotado
-                          ? "bg-orange-500/10 text-orange-100 ring-orange-400/20"
-                          : "bg-emerald-500/10 text-emerald-100 ring-emerald-400/20";
 
                     return (
                       <tr key={p.id} className="transition hover:bg-white/5">
-                        <td className="px-6 py-3">{p.nombre}</td>
-                        <td className="px-6 py-3">{p.categoria ?? "Sin categoria"}</td>
-                        <td className="px-6 py-3">{MONEDA.format(p.precio_base)}</td>
-                        <td className="px-6 py-3">{p.iva_porcentaje}%</td>
-                        <td className="px-6 py-3">
-                          <div className="flex min-w-[150px] items-center gap-2">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={draftSubas[p.id] ?? String(p.subida_porcentaje ?? 0)}
-                              onChange={(event) =>
-                                setDraftSubas((prev) => ({ ...prev, [p.id]: event.target.value }))
-                              }
-                              className="w-20 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-xs text-white outline-none focus:border-sky-300/40"
-                            />
-                            <span className="text-xs text-white/55">%</span>
-                            <button
-                              type="button"
-                              onClick={() => guardarSubaProducto(p)}
-                              disabled={guardandoSubaId === p.id}
-                              className="inline-flex items-center justify-center rounded-xl border border-emerald-300/30 bg-emerald-400 px-2 py-1 text-xs font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
-                              title="Guardar Margen de Ganancia"
-                            >
-                              {guardandoSubaId === p.id ? (
-                                <FaSpinner className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <FaSave className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          </div>
+                        <td className="whitespace-normal break-words px-3 py-4 text-center font-medium leading-5 text-white xl:px-4" title={p.nombre}>
+                          {p.nombre}
                         </td>
-                        <td className="px-6 py-3">{MONEDA.format(p.precio_cliente)}</td>
-                        <td className="px-6 py-3">{p.stock}</td>
-                        <td className="px-6 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${estadoClass}`}
-                          >
-                            {estadoTexto}
-                          </span>
+                        <td className="truncate px-3 py-3 text-center xl:px-4" title={p.categoria ?? "Sin categoria"}>
+                          {p.categoria ?? "Sin categoria"}
                         </td>
-                        <td className="px-6 py-3">
+                        <td className="whitespace-nowrap px-3 py-3 text-center xl:px-4">{MONEDA.format(p.precio_base)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center xl:px-4">{p.iva_porcentaje}%</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center xl:px-4">
+                          {Number(p.subida_porcentaje ?? 0).toLocaleString("es-CO", {
+                            maximumFractionDigits: 2,
+                          })}%
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center xl:px-4">{MONEDA.format(p.precio_cliente)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center xl:px-4">{p.stock}</td>
+                        <td className="px-3 py-3 text-center xl:px-4">
                           <div className="flex items-center justify-center gap-2">
                             <button title="Ver mas informacion" onClick={() => verProducto(p)} className={actionButtonClass}>
                               <Eye />
@@ -1145,7 +1191,7 @@ export default function ProductsPage() {
 
                 {!cargando && !error && filtrados.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-6 py-10 text-center text-white/55">
+                    <td colSpan={8} className="px-6 py-10 text-center text-white/55">
                       No hay productos para &quot;{query}&quot;.
                     </td>
                   </tr>

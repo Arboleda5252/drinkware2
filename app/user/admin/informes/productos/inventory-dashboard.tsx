@@ -8,11 +8,7 @@ import {
   FiZap,
   FiDollarSign,
   FiRotateCw,
-  FiDownload,
-  FiFilter,
   FiSearch,
-  FiX,
-  FiChevronDown,
   FiPackage,
   FiEye,
   FiRefreshCw,
@@ -22,19 +18,31 @@ import {
   FiClock,
   FiPercent,
 } from "react-icons/fi";
-import { MdInventory2, MdLowPriority, MdOutlineInventory2 } from "react-icons/md";
+import { MdInventory2, MdOutlineInventory2 } from "react-icons/md";
 import { HiOutlineExclamationCircle } from "react-icons/hi";
 import { HistorialMovimientos } from "./historial-movimientos";
+import Link from "next/link";
+
+const MONEDA = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
 
 interface ProductMetrics {
   id: number;
   nombre: string;
   categoria: string | null;
   precio: number;
+  precio_base: number;
+  precio_cliente: number;
+  iva_porcentaje: number;
+  subida_porcentaje: number;
   stock: number;
   imagen: string | null;
   descripcion: string | null;
   estado: string | null;
+  pedidos: boolean;
   unidadesVendidas: number;
   ventasTotal: number;
   diasSinMovimiento: number;
@@ -120,9 +128,23 @@ export default function InventoryDashboard() {
 
     // Filtro de búsqueda
     if (searchTerm) {
-      filtered = filtered.filter(p =>
-        p.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const query = searchTerm.trim().toLowerCase();
+      filtered = filtered.filter((p) => {
+        const searchable = [
+          p.nombre,
+          p.categoria ?? "Sin categoria",
+          p.estado ?? "Sin estado",
+          String(p.precio_base),
+          String(p.precio_cliente),
+          String(p.stock),
+          String(p.iva_porcentaje),
+          String(p.subida_porcentaje),
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return searchable.includes(query);
+      });
     }
 
     // Filtro de categoría
@@ -186,13 +208,21 @@ export default function InventoryDashboard() {
                 Control en tiempo real de stock, rotación de productos y optimización de compras.
               </p>
             </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-300 transition hover:border-sky-300 hover:bg-sky-500/20"
-            >
-              <FiRefreshCw className="h-4 w-4" />
-              Actualizar
-            </button>
+            <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+              <Link
+                href="/user/admin/products"
+                className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-300 transition hover:border-sky-300 hover:bg-sky-500/20"
+              >
+                Ver Productos
+              </Link>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-semibold text-sky-300 transition hover:border-sky-300 hover:bg-sky-500/20"
+              >
+                <FiRefreshCw className="h-4 w-4" />
+                Actualizar
+              </button>
+            </div>
           </div>
         </section>
 
@@ -277,10 +307,10 @@ export default function InventoryDashboard() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-400">Total</span>
                 <span className="font-bold text-lg">
-                  {data.estadoInventario.saludable +
+                  {(data.estadoInventario.saludable +
                     data.estadoInventario.alerta +
                     data.estadoInventario.critico +
-                    data.estadoInventario.sobrestock}.toLocaleString("es-CO")
+                    data.estadoInventario.sobrestock).toLocaleString("es-CO")}
                 </span>
               </div>
             </div>
@@ -333,13 +363,19 @@ export default function InventoryDashboard() {
               <div>
                 <p className="text-sm text-slate-400">Inventario sin rotación (mayor a 60 días)</p>
                 <p className="mt-2 text-3xl font-bold text-red-400">
-                  ${(data.kpis.capitalInmovilizado / 1000000).toFixed(1).toLocaleString("es-CO")}M
+                  ${(data.kpis.capitalInmovilizado / 1000000).toLocaleString("es-CO", {
+                    maximumFractionDigits: 1,
+                    minimumFractionDigits: 1,
+                  })}M
                 </p>
                 <p className="mt-2 text-xs text-slate-400">
                   {(
                     (data.kpis.capitalInmovilizado / data.kpis.valorTotalInventario) *
                     100
-                  ).toFixed(1).toLocaleString("es-CO")}% del inventario total
+                  ).toLocaleString("es-CO", {
+                    maximumFractionDigits: 1,
+                    minimumFractionDigits: 1,
+                  })}% del inventario total
                 </p>
               </div>
               <div className="mt-4 rounded-2xl bg-red-500/10 p-4 border border-red-500/30">
@@ -369,7 +405,9 @@ export default function InventoryDashboard() {
               >
                 <p className="text-sm text-slate-400">{cat.categoria}</p>
                 <p className="mt-2 text-2xl font-bold text-emerald-400">
-                  ${(cat.valor / 1000).toFixed(0).toLocaleString("es-CO")}K
+                  ${(cat.valor / 1000).toLocaleString("es-CO", {
+                    maximumFractionDigits: 0,
+                  })}K
                 </p>
                 <div className="mt-3 flex items-center justify-between text-xs">
                   <span className="text-slate-400">{cat.cantidad.toLocaleString("es-CO")} unidades</span>
@@ -430,7 +468,10 @@ export default function InventoryDashboard() {
                 title="Alto valor en inventario sin rotación"
                 count={1}
                 color="bg-purple-500/10 border-purple-500/30 text-purple-300"
-                action={`${(data.kpis.capitalInmovilizado / 1000000).toFixed(1).toLocaleString("es-CO")}M inmovilizado`}
+                action={`${(data.kpis.capitalInmovilizado / 1000000).toLocaleString("es-CO", {
+                  maximumFractionDigits: 1,
+                  minimumFractionDigits: 1,
+                })}M inmovilizado`}
               />
             )}
 
@@ -442,149 +483,6 @@ export default function InventoryDashboard() {
                 </div>
               )}
           </div>
-        </section>
-
-        {/* Tabla de Productos */}
-        <section className="rounded-3xl border border-sky-400/20 bg-slate-900/90 p-8">
-          <div className="mb-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <MdOutlineInventory2 className="h-6 w-6 text-sky-400" />
-              <h2 className="text-xl font-bold">Productos ({filteredProducts.length.toLocaleString("es-CO")})</h2>
-            </div>
-
-            {/* Filtros */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="relative">
-                <FiSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar producto..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800 pl-9 pr-3 py-2 text-sm text-white placeholder-slate-400 focus:border-sky-400 focus:outline-none"
-                />
-              </div>
-
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-sky-400 focus:outline-none"
-              >
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat === "Todos" ? "Todas las categorías" : cat}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-sky-400 focus:outline-none"
-              >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {status === "Todos" ? "Todos los estados" : status}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedRotation}
-                onChange={(e) => setSelectedRotation(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:border-sky-400 focus:outline-none"
-              >
-                {rotationOptions.map((rotation) => (
-                  <option key={rotation} value={rotation}>
-                    {rotation === "Todos" ? "Todas las rotaciones" : rotation}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Tabla */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-700">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-slate-300">
-                    Producto
-                  </th>
-                  <th className="px-4 py-3 text-center font-semibold text-slate-300">
-                    Stock
-                  </th>
-                  <th className="px-4 py-3 text-center font-semibold text-slate-300">
-                    Precio
-                  </th>
-                  <th className="px-4 py-3 text-center font-semibold text-slate-300">
-                    Ventas
-                  </th>
-                  <th className="px-4 py-3 text-center font-semibold text-slate-300">
-                    Rotación
-                  </th>
-                  <th className="px-4 py-3 text-center font-semibold text-slate-300">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 text-center font-semibold text-slate-300">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700">
-                {filteredProducts.slice(0, 10).map((prod) => (
-                  <tr
-                    key={prod.id}
-                    className="transition hover:bg-slate-800/50"
-                  >
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-semibold text-white">{prod.nombre}</p>
-                        <p className="text-xs text-slate-400">{prod.categoria}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="rounded-full bg-slate-800 px-2 py-1 font-semibold">
-                        {prod.stock.toLocaleString("es-CO")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-slate-300">
-                      ${prod.precio.toLocaleString("es-CO")}
-                    </td>
-                    <td className="px-4 py-3 text-center text-slate-300">
-                      {prod.unidadesVendidas.toLocaleString("es-CO")}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <RotationBadge rotation={prod.rotacion} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatusBadge status={prod.estado_stock} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button className="inline-flex items-center gap-1 rounded-lg bg-sky-500/20 px-2 py-1 text-xs text-sky-300 transition hover:bg-sky-500/30">
-                        <FiEye className="h-3 w-3" />
-                        Ver
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {filteredProducts.length === 0 && (
-            <div className="py-8 text-center">
-              <p className="text-slate-400">No se encontraron productos con los filtros aplicados</p>
-            </div>
-          )}
-
-          {filteredProducts.length > 10 && (
-            <div className="mt-4 flex items-center justify-center">
-              <button className="flex items-center gap-2 text-sky-400 transition hover:text-sky-300">
-                Ver más <FiChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          )}
         </section>
 
         {/* Recomendaciones */}
@@ -775,6 +673,26 @@ function StatusBadge({ status }: StatusBadgeProps) {
       <span>{config.icon}</span>
       <span className="text-xs">{config.label}</span>
     </div>
+  );
+}
+
+function ProductStateBadge({ estado, stock }: { estado: string | null; stock: number }) {
+  const normalized = (estado ?? "").toLowerCase();
+  const agotado = stock <= 0;
+  const label = agotado ? "Agotado" : estado ?? "Sin estado";
+  const color =
+    normalized === "inactivo"
+      ? "bg-white/10 text-white/55 ring-white/10"
+      : normalized === "no disponible"
+        ? "bg-amber-500/10 text-amber-100 ring-amber-400/20"
+        : agotado
+          ? "bg-orange-500/10 text-orange-100 ring-orange-400/20"
+          : "bg-emerald-500/10 text-emerald-100 ring-emerald-400/20";
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${color}`}>
+      {label}
+    </span>
   );
 }
 

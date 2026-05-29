@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FiClock, FiDownload, FiFilter } from "react-icons/fi";
 import { MdHistory } from "react-icons/md";
 
 interface MovimientoInventario {

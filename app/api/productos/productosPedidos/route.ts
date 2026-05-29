@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/app/Datalibs/database';
+import { logStockMovement } from '@/app/Datalibs/inventoryMovements';
 
 export const runtime = 'nodejs';
 
@@ -45,7 +46,7 @@ const normalizarDescripcion = (valor: unknown) => {
 
 export async function POST(req: NextRequest) {
   try {
-    let body: any;
+    let body: Record<string, unknown>;
     try {
       body = await req.json();
     } catch {
@@ -112,6 +113,13 @@ export async function POST(req: NextRequest) {
           { status: 404 }
         );
       }
+
+      await logStockMovement({
+        productoId: rows[0].producto_id,
+        stockAnterior: rows[0].nuevo_stock - rows[0].cantidad,
+        stockNuevo: rows[0].nuevo_stock,
+        referencia: `Pedido proveedor #${rows[0].id}`,
+      });
 
       return NextResponse.json({
         ok: true,
