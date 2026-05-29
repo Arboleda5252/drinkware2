@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 import { NextResponse } from 'next/server';
 import { sql } from '@/app/Datalibs/database';
+import { hashPassword } from '@/app/Datalibs/password';
 
 export const runtime = 'nodejs';
 
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
   let body;
   try {
     body = await req.json();
-  } catch (err) {
+  } catch {
     return NextResponse.json({ ok: false, error: 'Body inválido' }, { status: 400 });
   }
 
@@ -77,6 +78,11 @@ export async function POST(req: NextRequest) {
     if (!body[campo] || body[campo] === "") {
       return NextResponse.json({ ok: false, error: `Falta el campo obligatorio: ${campo}` }, { status: 400 });
     }
+  }
+
+  const passwordIndex = columnas.indexOf('password');
+  if (passwordIndex >= 0) {
+    valores[passwordIndex] = await hashPassword(String(valores[passwordIndex]));
   }
 
   const placeholders = valores.map((_, i) => `$${i + 1}`).join(', ');

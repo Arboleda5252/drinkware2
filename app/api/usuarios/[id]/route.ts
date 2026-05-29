@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/app/Datalibs/database';
 import { getUserFromSession } from '@/app/Datalibs/auth';
+import { hashPassword } from '@/app/Datalibs/password';
 
 export const runtime = 'nodejs';
 
@@ -191,7 +192,7 @@ export async function PUT(req: NextRequest, { params }: { params: UsuarioRoutePa
   let body;
   try {
     body = await req.json();
-  } catch (err) {
+  } catch {
     return NextResponse.json({ ok: false, error: 'Body inválido' }, { status: 400 });
   }
 
@@ -205,7 +206,7 @@ export async function PUT(req: NextRequest, { params }: { params: UsuarioRoutePa
   for (const campo of camposPersonales) {
     if (body[campo] !== undefined) {
       camposActualizar.push(`${campo === 'correo' ? 'email' : campo}`);
-      valoresActualizar.push(body[campo]);
+      valoresActualizar.push(campo === 'password' ? await hashPassword(String(body[campo])) : body[campo]);
     }
   }
 

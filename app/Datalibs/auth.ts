@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { sql } from "@/app/Datalibs/database";
+import { hashPassword, isPasswordHash, verifyPassword } from "@/app/Datalibs/password";
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? "dev-secret");
 
@@ -24,8 +25,19 @@ export async function authenticateUser(nombreusuario: string, password: string):
   );
   const user = rows[0];
 
-  if (!user || user.password !== password) {
+  const passwordMatches = user ? await verifyPassword(password, user.password) : false;
+  if (!user || !passwordMatches) {
     return { ok: false, error: "Credenciales incorrectas", status: 401 };
+  }
+
+  if (!isPasswordHash(user.password)) {
+    const hashedPassword = await hashPassword(password);
+    await sql(
+      `UPDATE public.usuario
+          SET password = $1
+        WHERE idusuario = $2`,
+      [hashedPassword, user.idusuario]
+    );
   }
 
   let activated = false;
