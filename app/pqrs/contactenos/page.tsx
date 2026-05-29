@@ -51,7 +51,7 @@ export default function Page() {
     setError(null);
 
     try {
-      const res = await fetch("/api/contacto", {
+      const res = await fetch("/api/solicitudes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -155,6 +155,7 @@ export default function Page() {
                   rows={6}
                   value={form.mensaje}
                   onChange={onChange}
+                  required
                   className="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white placeholder:text-white/35 focus:border-sky-300/40 focus:outline-none focus:ring-2 focus:ring-sky-400/30"
                 />
 

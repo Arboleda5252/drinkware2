@@ -49,11 +49,25 @@ const Search = () => (
   </svg>
 );
 
+const ChevronLeft = () => (
+  <svg className={ICON} viewBox="0 0 24 24" fill="none">
+    <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const ChevronRight = () => (
+  <svg className={ICON} viewBox="0 0 24 24" fill="none">
+    <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 const MONEDA = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
   maximumFractionDigits: 0,
 });
+
+const PRODUCTOS_POR_PAGINA = 20;
 
 const overlayClass =
   "fixed inset-0 z-50 flex justify-center bg-slate-950/75 px-4 backdrop-blur-sm";
@@ -108,6 +122,7 @@ export default function ProductsPage() {
   const [filtroCategoria, setFiltroCategoria] = React.useState<string>("Todas");
   const [filtroEstadoInventario, setFiltroEstadoInventario] = React.useState<string>("Todos");
   const [filtroRotacion, setFiltroRotacion] = React.useState<string>("Todas");
+  const [paginaActual, setPaginaActual] = React.useState(1);
   const [productos, setProductos] = React.useState<Producto[]>([]);
   const [cargando, setCargando] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -199,6 +214,29 @@ export default function ProductsPage() {
         return coincideTexto && coincideCat && coincideEstadoInventario && coincideRotacion;
       });
   }, [productos, query, filtroCategoria, filtroEstadoInventario, filtroRotacion]);
+
+  React.useEffect(() => {
+    setPaginaActual(1);
+  }, [query, filtroCategoria, filtroEstadoInventario, filtroRotacion]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / PRODUCTOS_POR_PAGINA));
+
+  React.useEffect(() => {
+    setPaginaActual((pagina) => Math.min(pagina, totalPaginas));
+  }, [totalPaginas]);
+
+  const inicioPagina = (paginaActual - 1) * PRODUCTOS_POR_PAGINA;
+  const finPagina = Math.min(inicioPagina + PRODUCTOS_POR_PAGINA, filtrados.length);
+  const productosPagina = React.useMemo(
+    () => filtrados.slice(inicioPagina, inicioPagina + PRODUCTOS_POR_PAGINA),
+    [filtrados, inicioPagina]
+  );
+  const paginasVisibles = React.useMemo(() => {
+    const paginas = new Set([1, totalPaginas, paginaActual - 1, paginaActual, paginaActual + 1]);
+    return Array.from(paginas)
+      .filter((pagina) => pagina >= 1 && pagina <= totalPaginas)
+      .sort((a, b) => a - b);
+  }, [paginaActual, totalPaginas]);
 
   const inactivos = React.useMemo(
     () => productos.filter((p) => (p.estados ?? "").toLowerCase() === "inactivo"),
@@ -1123,7 +1161,7 @@ export default function ProductsPage() {
 
                 {!cargando &&
                   !error &&
-                  filtrados.map((p) => {
+                  productosPagina.map((p) => {
                     const estado = (p.estados ?? "").toLowerCase();
                     const esDisponible = estado === "disponible";
                     const esAgotado = (p.stock ?? 0) <= 0;
@@ -1202,10 +1240,65 @@ export default function ProductsPage() {
         </div>
 
         {!cargando && !error && (
-          <p className="text-sm text-white/60">
-            Mostrando <span className="font-medium">{filtrados.length}</span> de{" "}
-            <span className="font-medium">{totalDisponibles}</span> productos disponibles
-          </p>
+          <div className="flex flex-col gap-4 text-sm text-white/60 lg:flex-row lg:items-center lg:justify-between">
+            <p>
+              Mostrando <span className="font-medium">{filtrados.length ? inicioPagina + 1 : 0}</span>
+              {" - "}
+              <span className="font-medium">{finPagina}</span> de{" "}
+              <span className="font-medium">{filtrados.length}</span> productos filtrados
+              {" ("}
+              <span className="font-medium">{totalDisponibles}</span> disponibles en total{")"}
+            </p>
+
+            {filtrados.length > PRODUCTOS_POR_PAGINA && (
+              <nav className="flex flex-wrap items-center gap-2" aria-label="Paginacion de productos">
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((pagina) => Math.max(1, pagina - 1))}
+                  disabled={paginaActual === 1}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 font-semibold text-white/80 transition hover:border-sky-300/30 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft />
+                  Anterior
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {paginasVisibles.map((pagina, index) => {
+                    const paginaPrevia = paginasVisibles[index - 1];
+                    const mostrarSalto = paginaPrevia != null && pagina - paginaPrevia > 1;
+
+                    return (
+                      <React.Fragment key={pagina}>
+                        {mostrarSalto && <span className="px-2 text-white/40">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setPaginaActual(pagina)}
+                          aria-current={pagina === paginaActual ? "page" : undefined}
+                          className={`h-9 min-w-9 rounded-xl border px-3 font-semibold transition ${
+                            pagina === paginaActual
+                              ? "border-sky-300/50 bg-sky-400 text-slate-950"
+                              : "border-white/10 bg-white/5 text-white/80 hover:border-sky-300/30 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          {pagina}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPaginaActual((pagina) => Math.min(totalPaginas, pagina + 1))}
+                  disabled={paginaActual === totalPaginas}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 font-semibold text-white/80 transition hover:border-sky-300/30 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Siguiente
+                  <ChevronRight />
+                </button>
+              </nav>
+            )}
+          </div>
         )}
       </div>
     </main>
