@@ -38,21 +38,66 @@ export async function GET(req: NextRequest) {
 
     const { rows } = await sql<MovimientoRow>(
       `
-        SELECT
-          m.id_movimiento AS id,
-          m.id_producto AS "productoId",
-          p.nombre AS "productoNombre",
-          m.tipo,
-          m.cantidad,
-          m.creado_en AS fecha,
-          m.responsable,
-          m.referencia,
-          p.precio_cliente::double precision AS "precioUnitario",
-          (m.cantidad * p.precio_cliente)::double precision AS subtotal
-        FROM public.inventario_movimiento AS m
-        INNER JOIN public.producto AS p ON p.idproducto = m.id_producto
-        WHERE m.creado_en >= NOW() - ($1::int * INTERVAL '1 day')
-        ORDER BY m.creado_en DESC, m.id_movimiento DESC;
+        SELECT *
+        FROM (
+          SELECT
+            m.id_movimiento AS id,
+            m.id_producto AS "productoId",
+            p.nombre AS "productoNombre",
+            m.tipo,
+            m.cantidad,
+            m.creado_en AS fecha,
+            m.responsable,
+            COALESCE(m.referencia, 'Ajuste de inventario') AS referencia,
+            p.precio_cliente::double precision AS "precioUnitario",
+            (m.cantidad * p.precio_cliente)::double precision AS subtotal
+          FROM public.inventario_movimiento AS m
+          INNER JOIN public.producto AS p ON p.idproducto = m.id_producto
+          WHERE m.creado_en >= NOW() - ($1::int * INTERVAL '1 day')
+            AND COALESCE(m.referencia, '') NOT LIKE 'Pedido proveedor #%'
+            AND NOT (
+              m.tipo = 'salida'
+              AND COALESCE(m.referencia, '') = 'Ajuste manual de stock'
+            )
+
+          UNION ALL
+
+          SELECT
+            100000000 + pp.id AS id,
+            pp.producto_id AS "productoId",
+            p.nombre AS "productoNombre",
+            'entrada'::text AS tipo,
+            pp.cantidad,
+            pp.creado_en AS fecha,
+            NULL::text AS responsable,
+            CONCAT('Pedido proveedor #', pp.id) AS referencia,
+            p.precio_cliente::double precision AS "precioUnitario",
+            (pp.cantidad * p.precio_cliente)::double precision AS subtotal
+          FROM public.pedidosproveedor AS pp
+          INNER JOIN public.producto AS p ON p.idproducto = pp.producto_id
+          WHERE LOWER(pp.estado::text) = 'aceptado'
+            AND pp.creado_en >= NOW() - ($1::int * INTERVAL '1 day')
+
+          UNION ALL
+
+          SELECT
+            200000000 + dp.iddetallepedido AS id,
+            dp.id_producto AS "productoId",
+            p.nombre AS "productoNombre",
+            'salida'::text AS tipo,
+            dp.cantidad,
+            dp.fechapago AS fecha,
+            u.nombreusuario AS responsable,
+            CONCAT('Venta #', dp.iddetallepedido) AS referencia,
+            dp.precioproducto::double precision AS "precioUnitario",
+            dp.subtotal::double precision AS subtotal
+          FROM public.detallepedido AS dp
+          INNER JOIN public.producto AS p ON p.idproducto = dp.id_producto
+          LEFT JOIN public.usuario AS u ON u.idusuario = dp.idvendedor
+          WHERE dp.fechapago IS NOT NULL
+            AND dp.fechapago >= NOW() - ($1::int * INTERVAL '1 day')
+        ) AS movimientos
+        ORDER BY fecha DESC, id DESC;
       `,
       [dias]
     );

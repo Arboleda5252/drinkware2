@@ -255,21 +255,22 @@ export default async function CustomerReportPage() {
                 <div key={customer.id} className="rounded-3xl border border-slate-800/60 bg-slate-950/70 p-5 transition hover:border-sky-300/40">
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-sm text-slate-400">{customer.username}</p>
                       <h3 className="mt-2 text-xl font-semibold text-white">{customer.name}</h3>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-2xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">
+                    <div className="grid w-full gap-3 sm:grid-cols-3 md:w-[28rem] lg:w-[32rem]">
+                      <div className="flex min-h-[6.25rem] flex-col justify-between rounded-2xl bg-slate-900/80 px-4 py-3 text-center text-sm text-slate-300">
                         <p className="font-semibold text-slate-100">Pedidos</p>
-                        <p className="mt-2 text-lg font-bold text-white">{customer.orders}</p>
+                        <p className="mt-2 break-words text-lg font-bold text-white">{customer.orders}</p>
                       </div>
-                      <div className="rounded-2xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">
+                      <div className="flex min-h-[6.25rem] flex-col justify-between rounded-2xl bg-slate-900/80 px-4 py-3 text-center text-sm text-slate-300">
                         <p className="font-semibold text-slate-100">Ticket</p>
-                        <p className="mt-2 text-lg font-bold text-sky-300">${customer.avgTicket.toLocaleString()}</p>
+                        <p className="mt-2 break-words text-lg font-bold text-sky-300">${customer.avgTicket.toLocaleString()}</p>
                       </div>
-                      <div className="rounded-2xl bg-slate-900/80 px-4 py-3 text-sm text-slate-300">
+                      <div className="flex min-h-[6.25rem] flex-col justify-between rounded-2xl bg-slate-900/80 px-4 py-3 text-center text-sm text-slate-300">
                         <p className="font-semibold text-slate-100">Preferencia</p>
-                        <p className="mt-2 text-lg font-bold text-white">{customer.topCategory}</p>
+                        <p className="mt-2 line-clamp-2 break-words text-base font-bold leading-snug text-white" title={customer.topCategory}>
+                          {customer.topCategory}
+                        </p>
                       </div>
                     </div>
                   </div>

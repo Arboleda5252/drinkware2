@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { FiEye } from "react-icons/fi";
+import { sql } from "@/app/Datalibs/database";
+
+export const dynamic = "force-dynamic";
 
 const reports = [
   {
@@ -33,7 +37,40 @@ const reports = [
   },
 ];
 
-export default function InformesPage() {
+async function getLiquorIndicators() {
+  const [{ rows: salesRows }, { rows: stockRows }] = await Promise.all([
+    sql<{ bottles_sold: number }>(`
+      SELECT COALESCE(SUM(dp.cantidad), 0)::int AS bottles_sold
+      FROM public.detalle_pedido dp
+      JOIN public.pedido ped ON dp.id_pedido = ped.id_pedido
+      WHERE EXISTS (
+        SELECT 1
+        FROM public.pago pg
+        WHERE pg.id_pedido = ped.id_pedido
+          AND LOWER(pg.estado_pago) = 'pagado'
+      );
+    `),
+    sql<{ premium_stock: number }>(`
+      SELECT COALESCE(SUM(stock), 0)::int AS premium_stock
+      FROM public.producto
+      WHERE COALESCE(estados, 'Disponible') <> 'Inactivo'
+        AND (
+          categoria ILIKE '%premium%'
+          OR nombre ILIKE '%premium%'
+          OR descripcion ILIKE '%premium%'
+        );
+    `),
+  ]);
+
+  return {
+    bottlesSold: Number(salesRows[0]?.bottles_sold ?? 0),
+    premiumStock: Number(stockRows[0]?.premium_stock ?? 0),
+  };
+}
+
+export default async function InformesPage() {
+  const indicators = await getLiquorIndicators();
+
   return (
     <main className="min-h-screen bg-slate-950/40 px-4 py-10 text-white sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -56,14 +93,17 @@ export default function InformesPage() {
                 <Link
                   key={report.title}
                   href={report.href ?? "#"}
-                  className="rounded-3xl border border-white/10 bg-slate-950/50 px-4 py-4 text-left transition hover:border-sky-300/40 hover:bg-slate-800/80"
+                  className="group rounded-3xl border border-white/10 bg-slate-950/50 px-4 py-4 text-left transition hover:border-sky-300/40 hover:bg-slate-800/80"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-sky-200">
                       {report.badge}
                     </span>
-                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
-                      Ver informe
+                    <span
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-400/20 bg-sky-500/10 text-sky-200 transition group-hover:border-sky-300/50 group-hover:bg-sky-500/20"
+                      aria-label={`Ver informe ${report.title}`}
+                    >
+                      <FiEye className="h-4 w-4" />
                     </span>
                   </div>
                   <h2 className="mt-5 text-lg font-semibold text-white">{report.title}</h2>
@@ -122,11 +162,11 @@ export default function InformesPage() {
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-3xl bg-slate-900/80 px-4 py-4">
                   <p className="text-sm uppercase tracking-[0.25em] text-slate-400">Botellas vendidas</p>
-                  <p className="mt-2 text-3xl font-bold text-white">3,420</p>
+                  <p className="mt-2 text-3xl font-bold text-white">{indicators.bottlesSold.toLocaleString("es-CO")}</p>
                 </div>
                 <div className="rounded-3xl bg-slate-900/80 px-4 py-4">
                   <p className="text-sm uppercase tracking-[0.25em] text-slate-400">Stock premium</p>
-                  <p className="mt-2 text-3xl font-bold text-white">76</p>
+                  <p className="mt-2 text-3xl font-bold text-white">{indicators.premiumStock.toLocaleString("es-CO")}</p>
                 </div>
               </div>
             </div>

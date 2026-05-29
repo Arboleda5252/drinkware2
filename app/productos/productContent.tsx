@@ -7,6 +7,7 @@ import {
   FaShoppingCart,
   FaTrash,
   FaTimes,
+  FaSearch,
 } from "react-icons/fa";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -709,7 +710,7 @@ export default function Page() {
   return (
     <main className="bg-black py-3 text-gray-800 sm:py-10 lg:py-12">
       {/* BOTÓN DEL CARRITO */}
-      <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
+      <div className="fixed right-4 top-24 z-50 sm:right-6 sm:top-28">
         <button
           onClick={() => setDrawerAbierto(true)}
           className="flex items-center gap-2 rounded-full bg-slate-900 px-5 py-4 text-lg text-white shadow-lg transition hover:bg-sky-600"
@@ -724,28 +725,31 @@ export default function Page() {
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95" />
 
         <div className="relative z-10 mx-auto max-w-7xl px-1 py-6 sm:px-6 sm:py-10 lg:px-8">
-        <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 px-5 py-8 sm:px-8">
-            <h1 className="mt-3 text-center text-3xl font-extrabold italic tracking-tight text-slate-900 sm:text-4xl lg:text-5xl">
-              Catálogo de productos 
+        <div className="overflow-hidden rounded-[2rem] border border-amber-400/20 bg-slate-950/90 shadow-[0_30px_90px_rgba(0,0,0,0.45)]">
+          <div className="border-b border-amber-400/10 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.16),transparent_34%)] px-5 py-10 text-center sm:px-8">
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">
+              Catalogo de productos
             </h1>
           </div>
 
-      {/* BÚSQUEDA */}
+      {/* BUSQUEDA Y FILTROS */}
       <div className="mx-auto mb-6 max-w-3xl px-5 pt-6 sm:px-8">
+        <div className="relative">
+          <FaSearch className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-300/80" />
         <input
           type="search"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Busca por nombre..."
-          className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
+          placeholder="Buscar por nombre..."
+          className="h-12 w-full rounded-2xl border border-amber-400/20 bg-slate-900/95 pl-11 pr-4 text-sm text-white shadow-sm outline-none transition placeholder:text-slate-500 hover:border-amber-300/40 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
         />
+        </div>
       </div>
 
       {/* FILTROS */}
       <div className="mb-10 grid gap-3 px-5 sm:grid-cols-2 sm:px-8 md:grid-cols-4">
         <select
-          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
+          className="h-12 rounded-2xl border border-amber-400/20 bg-slate-900/95 px-4 text-sm text-white shadow-sm outline-none transition hover:border-amber-300/40 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
           value={categoriaFiltro}
           onChange={(e) => setCategoriaFiltro(e.target.value)}
         >
@@ -761,7 +765,7 @@ export default function Page() {
           type="number"
           min="0"
           placeholder="Precio minimo"
-          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
+          className="h-12 rounded-2xl border border-amber-400/20 bg-slate-900/95 px-4 text-sm text-white shadow-sm outline-none transition placeholder:text-slate-500 hover:border-amber-300/40 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
           value={precioMin}
           onChange={(e) => setPrecioMin(e.target.value)}
         />
@@ -770,13 +774,13 @@ export default function Page() {
           type="number"
           min="0"
           placeholder="Precio maximo"
-          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
+          className="h-12 rounded-2xl border border-amber-400/20 bg-slate-900/95 px-4 text-sm text-white shadow-sm outline-none transition placeholder:text-slate-500 hover:border-amber-300/40 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
           value={precioMax}
           onChange={(e) => setPrecioMax(e.target.value)}
         />
 
         <select
-          className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900"
+          className="h-12 rounded-2xl border border-amber-400/20 bg-slate-900/95 px-4 text-sm text-white shadow-sm outline-none transition hover:border-amber-300/40 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/20"
           value={orden}
           onChange={(e) => setOrden(e.target.value)}
         >

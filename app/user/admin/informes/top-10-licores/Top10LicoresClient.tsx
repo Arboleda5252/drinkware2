@@ -69,6 +69,11 @@ export default function Top10LicoresClient({ initialMonth, year }: Top10LicoresC
           `/api/informes/top-10-licores?month=${selectedMonth}&year=${year}`,
           { cache: "no-store" }
         );
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          throw new Error("La ruta del Top 10 no devolvio datos JSON");
+        }
+
         const result = await response.json();
 
         if (!response.ok || !result.ok) {
