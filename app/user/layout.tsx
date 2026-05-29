@@ -163,6 +163,7 @@ function Link_Roles(roleId: number | null | undefined, vendedorActivo?: boolean,
         { href: "/user/admin/alertas", label: "Notificaciones", badgeCount: adminNotificationCount },
         { href: "/user/admin", label: "Gestion de usuarios" },
         { href: "/user/admin/products", label: "Gestion de productos" },
+        { href: "/user/admin/promociones", label: "Promociones" },
         { href: "/user/admin/informes", label: "Gestión de Informes" },
         { href: "/user/vendedor", label: "Gestion de Ventas" },
       ];
