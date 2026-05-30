@@ -3,12 +3,14 @@
 import Link from "next/link";
 import * as React from "react";
 import {
+  MdCheckCircle,
   MdCircle,
   MdInventory2,
   MdLocalShipping,
   MdMoreVert,
   MdPeople,
   MdRadioButtonUnchecked,
+  MdReply,
   MdRefresh,
   MdReportProblem,
 } from "react-icons/md";
@@ -92,6 +94,14 @@ type Pago = {
   observacion: string | null;
 };
 
+type Solicitud = {
+  id: number;
+  nombre: string;
+  correo: string;
+  mensaje: string;
+  respuesta: string | null;
+};
+
 type DetallePedido = {
   idDetallePedido: number;
   idPedido: number;
@@ -124,6 +134,7 @@ type TabId = "inventario" | "proveedor" | "entregas" | "quejas";
 type AlertAction =
   | { kind: "link"; href: string; label: string }
   | { kind: "modal"; pedidoId: number; label: string }
+  | { kind: "reply"; solicitudId: number; label: string }
   | null;
 
 type AlertaItem = {
@@ -134,6 +145,8 @@ type AlertaItem = {
   accentClass: string;
   urgent: boolean;
   action: AlertAction;
+  answered?: boolean;
+  respuesta?: string | null;
 };
 
 function formatDate(value: string | null) {
@@ -158,8 +171,13 @@ export default function AdminAlertasPage() {
   const [vendedores, setVendedores] = React.useState<Vendedor[]>([]);
   const [pagos, setPagos] = React.useState<Pago[]>([]);
   const [detallesPedido, setDetallesPedido] = React.useState<DetallePedido[]>([]);
+  const [solicitudes, setSolicitudes] = React.useState<Solicitud[]>([]);
   const [cargando, setCargando] = React.useState(true);
   const [selectedPedidoId, setSelectedPedidoId] = React.useState<number | null>(null);
+  const [selectedSolicitudId, setSelectedSolicitudId] = React.useState<number | null>(null);
+  const [respuestaDraft, setRespuestaDraft] = React.useState("");
+  const [respondiendo, setRespondiendo] = React.useState(false);
+  const [respuestaError, setRespuestaError] = React.useState<string | null>(null);
 
   const fetchData = React.useCallback(async () => {
     setCargando(true);
@@ -174,6 +192,7 @@ export default function AdminAlertasPage() {
         fetch("/api/vendedores", { cache: "no-store" }),
         fetch("/api/pago", { cache: "no-store" }),
         fetch("/api/detalle_pedido", { cache: "no-store" }),
+        fetch("/api/solicitudes", { cache: "no-store" }),
       ]);
 
       const [
@@ -186,6 +205,7 @@ export default function AdminAlertasPage() {
         vendedoresJson,
         pagosJson,
         detallesPedidoJson,
+        solicitudesJson,
       ] = await Promise.all(responses.map((response) => response.json()));
 
       if (productosJson.ok) setProductos(productosJson.data);
@@ -197,6 +217,7 @@ export default function AdminAlertasPage() {
       if (vendedoresJson.ok) setVendedores(vendedoresJson.data);
       if (pagosJson.ok) setPagos(pagosJson.data);
       if (detallesPedidoJson.ok) setDetallesPedido(detallesPedidoJson.data);
+      if (solicitudesJson.ok) setSolicitudes(solicitudesJson.data);
     } catch (error) {
       console.error("Error", error);
     } finally {
@@ -295,6 +316,57 @@ export default function AdminAlertasPage() {
   );
 
   const selectedPedido = selectedPedidoId ? domiciliosPorPedido.get(selectedPedidoId) ?? null : null;
+  const selectedSolicitud = selectedSolicitudId
+    ? solicitudes.find((solicitud) => solicitud.id === selectedSolicitudId) ?? null
+    : null;
+
+  const openRespuestaModal = React.useCallback(
+    (solicitudId: number) => {
+      const solicitud = solicitudes.find((item) => item.id === solicitudId);
+      setSelectedSolicitudId(solicitudId);
+      setRespuestaDraft(solicitud?.respuesta ?? "");
+      setRespuestaError(null);
+    },
+    [solicitudes]
+  );
+
+  const handleResponderSolicitud = React.useCallback(async () => {
+    if (!selectedSolicitud) return;
+
+    const respuesta = respuestaDraft.trim();
+    if (!respuesta) {
+      setRespuestaError("Escribe una respuesta antes de guardar.");
+      return;
+    }
+
+    setRespondiendo(true);
+    setRespuestaError(null);
+
+    try {
+      const response = await fetch("/api/solicitudes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedSolicitud.id, respuesta }),
+      });
+      const json = await response.json();
+
+      if (!response.ok || !json.ok) {
+        throw new Error(json.error || "No se pudo guardar la respuesta.");
+      }
+
+      setSolicitudes((current) =>
+        current.map((solicitud) =>
+          solicitud.id === selectedSolicitud.id ? json.data : solicitud
+        )
+      );
+      setSelectedSolicitudId(null);
+      setRespuestaDraft("");
+    } catch (error) {
+      setRespuestaError(error instanceof Error ? error.message : "No se pudo guardar la respuesta.");
+    } finally {
+      setRespondiendo(false);
+    }
+  }, [respuestaDraft, selectedSolicitud]);
 
   const alertasInventario = React.useMemo<AlertaItem[]>(
     () =>
@@ -344,19 +416,18 @@ export default function AdminAlertasPage() {
 
   const alertasEntregas = React.useMemo<AlertaItem[]>(
     () =>
-      domiciliosDetalle.map((pedido) => {
+      domiciliosDetalle.flatMap((pedido) => {
         const entrega = pedido.entrega;
-        const sinDomiciliario = !entrega || entrega.idDomiciliario === null;
         const estadoEntrega = entrega?.estadoEntrega?.trim() || "Pendiente";
         const estado = estadoEntrega.toLowerCase();
         const destino = entrega?.ciudad || entrega?.direccionEntrega || "Entrega a domicilio";
 
-        if (sinDomiciliario) {
-          return {
+        if (estado === "pendiente") {
+          return [{
             id: `ent-${pedido.idPedido}`,
-            tipo: "Asignar Domiciliario",
+            tipo: "Entrega Pendiente",
             titulo: `Pedido #${pedido.idPedido}`,
-            descripcion: `${destino}. Este pedido esta pendiente de asignacion de un domiciliario.`,
+            descripcion: `${destino}. Este domicilio esta pendiente de gestion.`,
             accentClass: "text-violet-300",
             urgent: true,
             action: {
@@ -364,55 +435,47 @@ export default function AdminAlertasPage() {
               href: `/user/admin/gestionDomiciliario?pedido=${pedido.idPedido}`,
               label: "Asignar entrega",
             },
-          };
+          }];
         }
 
-        if (estado === "asignada") {
-          return {
-            id: `ent-${pedido.idPedido}`,
-            tipo: "Entrega Asignada",
-            titulo: `Pedido #${pedido.idPedido}`,
-            descripcion: `${destino}. Domiciliario: ${pedido.domiciliarioNombre ?? "Asignado"}.`,
-            accentClass: "text-sky-300",
-            urgent: false,
-            action: {
-              kind: "modal",
-              pedidoId: pedido.idPedido,
-              label: "Ver entrega",
-            },
-          };
-        }
-
-        if (estado === "entregada") {
-          return {
-            id: `ent-${pedido.idPedido}`,
-            tipo: "Entrega Entregada",
-            titulo: `Pedido #${pedido.idPedido}`,
-            descripcion: `${destino}. Pedido entregado correctamente.`,
-            accentClass: "text-emerald-300",
-            urgent: false,
-            action: null,
-          };
-        }
-
-        return {
-          id: `ent-${pedido.idPedido}`,
-          tipo: `Entrega ${estadoEntrega}`,
-          titulo: `Pedido #${pedido.idPedido}`,
-          descripcion: `${destino}. Estado actual: ${estadoEntrega}.`,
-          accentClass: "text-slate-300",
-          urgent: false,
-          action: null,
-        };
+        return [];
       }),
     [domiciliosDetalle]
+  );
+
+  const alertasCliente = React.useMemo<AlertaItem[]>(
+    () =>
+      solicitudes.map((solicitud) => {
+        const respondida = Boolean(solicitud.respuesta?.trim());
+
+        return {
+          id: `sol-${solicitud.id}`,
+          tipo: respondida ? "Solicitud Respondida" : "Solicitud Pendiente",
+          titulo: solicitud.nombre,
+          descripcion: `${solicitud.correo} - ${solicitud.mensaje}`,
+          accentClass: respondida ? "text-emerald-300" : "text-rose-300",
+          urgent: !respondida,
+          action: {
+            kind: "reply",
+            solicitudId: solicitud.id,
+            label: respondida ? "Editar respuesta" : "Responder",
+          },
+          answered: respondida,
+          respuesta: solicitud.respuesta,
+        };
+      }),
+    [solicitudes]
+  );
+  const solicitudesPendientesCount = React.useMemo(
+    () => solicitudes.filter((solicitud) => !solicitud.respuesta?.trim()).length,
+    [solicitudes]
   );
 
   const tabs = [
     { id: "inventario", label: "Inventario", icon: <MdInventory2 />, activeColor: "text-cyan-400", glow: "shadow-cyan-500/20", count: alertasInventario.length },
     { id: "proveedor", label: "Suministros", icon: <MdPeople />, activeColor: "text-emerald-400", glow: "shadow-emerald-500/20", count: alertasProveedor.length },
     { id: "entregas", label: "Entregas", icon: <MdLocalShipping />, activeColor: "text-purple-400", glow: "shadow-purple-500/20", count: alertasEntregas.length },
-    { id: "quejas", label: "Atencion al Cliente", icon: <MdReportProblem />, activeColor: "text-rose-400", glow: "shadow-rose-500/20", count: 0 },
+    { id: "quejas", label: "Atencion al Cliente", icon: <MdReportProblem />, activeColor: "text-rose-400", glow: "shadow-rose-500/20", count: solicitudesPendientesCount },
   ] as const;
 
   const data =
@@ -422,7 +485,10 @@ export default function AdminAlertasPage() {
         ? alertasProveedor
         : activeTab === "entregas"
           ? alertasEntregas
-          : [];
+          : alertasCliente;
+
+  const totalRegistros =
+    alertasInventario.length + alertasProveedor.length + alertasEntregas.length + solicitudesPendientesCount;
 
   return (
     <main className="min-h-screen bg-[#0a0c10] font-sans text-slate-300 selection:bg-cyan-500/30">
@@ -443,7 +509,7 @@ export default function AdminAlertasPage() {
           </div>
         </div>
         <div className="text-[10px] font-mono tracking-tighter text-slate-500">
-          Registros: {alertasInventario.length + alertasProveedor.length + alertasEntregas.length}
+          Registros: {totalRegistros}
         </div>
       </div>
 
@@ -494,13 +560,22 @@ export default function AdminAlertasPage() {
               {data.map((item) => (
                 <li key={item.id} className="group px-6 py-4 transition-all duration-200 hover:bg-slate-800/40">
                   <div className="flex items-center gap-4">
-                    <MdRadioButtonUnchecked className="shrink-0 text-slate-600 transition-colors group-hover:text-slate-400" />
+                    {item.answered ? (
+                      <MdCheckCircle className="shrink-0 text-xl text-emerald-400 transition-colors group-hover:text-emerald-300" />
+                    ) : (
+                      <MdRadioButtonUnchecked className="shrink-0 text-slate-600 transition-colors group-hover:text-slate-400" />
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span className={`text-sm font-bold uppercase tracking-wider ${item.accentClass}`}>{item.tipo}</span>
                         <span className="text-base font-medium text-white">{item.titulo}</span>
                       </div>
                       <p className="mt-1 text-sm text-slate-400">{item.descripcion}</p>
+                      {item.respuesta && (
+                        <p className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-100">
+                          {item.respuesta}
+                        </p>
+                      )}
                     </div>
                     {item.action?.kind === "link" && (
                       <Link
@@ -523,6 +598,16 @@ export default function AdminAlertasPage() {
                         {item.action.label}
                       </button>
                     )}
+                    {item.action?.kind === "reply" && (
+                      <button
+                        type="button"
+                        onClick={() => openRespuestaModal(item.action?.kind === "reply" ? item.action.solicitudId : 0)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-bold tracking-wider text-rose-300 transition hover:border-rose-400/50 hover:bg-rose-500/20 hover:text-rose-200"
+                      >
+                        <MdReply className="text-base" />
+                        {item.action.label}
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -541,6 +626,56 @@ export default function AdminAlertasPage() {
           onClose={() => setSelectedPedidoId(null)}
           readOnly
         />
+      )}
+
+      {selectedSolicitud && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-[#0d1117] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-300">Atencion al cliente</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">{selectedSolicitud.nombre}</h2>
+                <p className="mt-1 text-sm text-slate-400">{selectedSolicitud.correo}</p>
+              </div>
+              {selectedSolicitud.respuesta && <MdCheckCircle className="text-2xl text-emerald-400" />}
+            </div>
+
+            <div className="mt-5 rounded-lg border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
+              {selectedSolicitud.mensaje}
+            </div>
+
+            <label className="mt-5 block text-xs font-bold uppercase tracking-widest text-slate-500" htmlFor="respuesta-solicitud">
+              Respuesta
+            </label>
+            <textarea
+              id="respuesta-solicitud"
+              value={respuestaDraft}
+              onChange={(event) => setRespuestaDraft(event.target.value)}
+              rows={5}
+              className="mt-2 w-full resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-rose-400"
+              placeholder="Escribe la respuesta para el cliente"
+            />
+            {respuestaError && <p className="mt-2 text-sm text-rose-300">{respuestaError}</p>}
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setSelectedSolicitudId(null)}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResponderSolicitud}
+                disabled={respondiendo}
+                className="rounded-lg border border-rose-500/40 bg-rose-500/15 px-4 py-2 text-sm font-bold text-rose-200 transition hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {respondiendo ? "Guardando..." : "Guardar respuesta"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

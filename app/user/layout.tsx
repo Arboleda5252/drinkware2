@@ -102,12 +102,22 @@ async function getVendedorActivo(userId: number) {
 }
 
 async function getAdminNotificationCount() {
-  const [inventarioResult, proveedorResult, entregasResult] = await Promise.all([
+  const [solicitudesResult, entregasResult, proveedorResult, inventarioResult] = await Promise.all([
     sql<{ count: string }>(
       `
         SELECT COUNT(*)::text AS count
-        FROM public.producto
-        WHERE stock < 20;
+        FROM public.solicitudes
+        WHERE respuesta IS NULL OR TRIM(respuesta) = '';
+      `
+    ),
+    sql<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM public.pedido AS p
+        INNER JOIN public.entrega AS e
+          ON e.id_pedido = p.id_pedido
+        WHERE LOWER(COALESCE(TRIM(p.tipo_entrega), '')) = 'domicilio'
+          AND LOWER(COALESCE(TRIM(e.estado_entrega), '')) = 'pendiente';
       `
     ),
     sql<{ count: string }>(
@@ -119,19 +129,18 @@ async function getAdminNotificationCount() {
     sql<{ count: string }>(
       `
         SELECT COUNT(*)::text AS count
-        FROM public.pedido AS p
-        LEFT JOIN public.entrega AS e
-          ON e.id_pedido = p.id_pedido
-        WHERE LOWER(COALESCE(TRIM(p.tipo_entrega), '')) = 'domicilio';
+        FROM public.producto
+        WHERE stock < 20;
       `
     ),
   ]);
 
+  const solicitudes = Number(solicitudesResult.rows[0]?.count ?? 0);
+  const entregas = Number(entregasResult.rows[0]?.count ?? 0);
   const inventario = Number(inventarioResult.rows[0]?.count ?? 0);
   const proveedor = Number(proveedorResult.rows[0]?.count ?? 0);
-  const entregas = Number(entregasResult.rows[0]?.count ?? 0);
 
-  return inventario + proveedor + entregas;
+  return solicitudes + entregas + proveedor + inventario;
 }
 
 function getRoleLogo(roleId: number | null | undefined) {
