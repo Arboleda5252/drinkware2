@@ -18,3 +18,59 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  min-width: 0;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+table {
+  min-width: 100%;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+  }
+
+  main {
+    min-width: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  p,
+  span,
+  a,
+  button {
+    overflow-wrap: anywhere;
+  }
+}

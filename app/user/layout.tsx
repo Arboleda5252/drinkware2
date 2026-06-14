@@ -35,34 +35,34 @@ export default async function UserLayout({ children }: UserLayoutProps) {
 
       <div className="relative z-10 flex min-h-screen flex-col md:flex-row">
         <aside className="w-full border-b border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md md:w-72 md:border-b-0 md:border-r">
-          <div className="flex h-full flex-col px-3 py-4 md:px-4">
+          <div className="flex h-full flex-col gap-3 px-3 py-3 md:gap-0 md:px-4 md:py-4">
             <Link
-              className="mb-4 flex h-20 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 md:h-44"
+              className="flex min-h-16 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 md:mb-4 md:h-44"
               href="/user"
             >
-              <div className="flex w-full flex-col items-center justify-center text-white">
+              <div className="flex w-full items-center justify-center gap-3 text-white md:flex-col md:gap-0">
                 <Image
                   src={roleLogo}
                   alt="Logo usuario"
                   width={60}
                   height={60}
-                  className="w-full max-w-[60px] brightness-0 invert"
+                  className="w-full max-w-[42px] brightness-0 invert md:max-w-[60px]"
                 />
-                <p className="mt-3 text-lg font-semibold md:text-2xl">{displayName}</p>
+                <p className="line-clamp-2 text-base font-semibold md:mt-3 md:text-center md:text-2xl">{displayName}</p>
               </div>
             </Link>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3 text-center md:p-4">
               <p className="text-xs uppercase tracking-[0.2em] text-sky-200">{displayRole}</p>
             </div>
 
-            <div className="mt-4 flex grow flex-row justify-between space-x-2 md:flex-col md:space-x-0 md:space-y-2">
-              <nav className="flex w-full flex-col space-y-2">
+            <div className="flex grow flex-row justify-between space-x-2 overflow-x-auto pb-1 md:mt-4 md:flex-col md:space-x-0 md:space-y-2 md:overflow-visible md:pb-0">
+              <nav className="flex w-full min-w-max gap-2 md:min-w-0 md:flex-col md:space-y-2">
                 {menuLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="flex items-center justify-between rounded-xl border border-white/10 bg-gray-200/12 px-4 py-3 text-sm font-semibold text-white/85 transition hover:border-sky-300/30 hover:bg-gray-300/18 hover:text-white"
+                    className="flex min-w-[150px] items-center justify-between gap-3 rounded-xl border border-white/10 bg-gray-200/12 px-4 py-3 text-sm font-semibold text-white/85 transition hover:border-sky-300/30 hover:bg-gray-300/18 hover:text-white md:min-w-0"
                   >
                     <span>{link.label}</span>
                     {typeof link.badgeCount === "number" ? (
@@ -77,7 +77,7 @@ export default async function UserLayout({ children }: UserLayoutProps) {
           </div>
         </aside>
 
-        <main className="flex-1 p-6 md:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
       </div>
     </div>
   );

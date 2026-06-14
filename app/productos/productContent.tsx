@@ -708,7 +708,7 @@ export default function Page() {
   // =========================================================
 
   return (
-    <main className="bg-black py-3 text-gray-800 sm:py-10 lg:py-12">
+    <main className="bg-black py-2 text-gray-800 sm:py-10 lg:py-12">
       {/* BOTÓN DEL CARRITO */}
       <div className="fixed right-4 top-24 z-50 sm:right-6 sm:top-28">
         <button
@@ -720,14 +720,14 @@ export default function Page() {
         </button>
       </div>
 
-      <section className="relative overflow-hidden rounded-b-[2.5rem] bg-[#0b1220] shadow-2xl">
+      <section className="relative overflow-hidden rounded-b-[1.75rem] bg-[#0b1220] shadow-2xl sm:rounded-b-[2.5rem]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.06),transparent_32%)]" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95" />
 
-        <div className="relative z-10 mx-auto max-w-7xl px-1 py-6 sm:px-6 sm:py-10 lg:px-8">
-        <div className="overflow-hidden rounded-[2rem] border border-amber-400/20 bg-slate-950/90 shadow-[0_30px_90px_rgba(0,0,0,0.45)]">
-          <div className="border-b border-amber-400/10 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.16),transparent_34%)] px-5 py-10 text-center sm:px-8">
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">
+        <div className="relative z-10 mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-10 lg:px-8">
+        <div className="overflow-hidden rounded-[1.5rem] border border-amber-400/20 bg-slate-950/90 shadow-[0_30px_90px_rgba(0,0,0,0.45)] sm:rounded-[2rem]">
+          <div className="border-b border-amber-400/10 bg-[radial-gradient(circle_at_top,rgba(245,158,11,0.16),transparent_34%)] px-4 py-7 text-center sm:px-8 sm:py-10">
+            <h1 className="mt-4 text-2xl font-black tracking-tight text-white sm:text-5xl">
               Catalogo de productos
             </h1>
           </div>
@@ -925,7 +925,7 @@ export default function Page() {
       </div>
 
       {/* PAGINACIÓN */}
-      <div className="mt-10 flex flex-wrap justify-center gap-3 px-5 pb-8 sm:px-8">
+      <div className="mt-8 flex flex-wrap justify-center gap-2 px-4 pb-6 sm:mt-10 sm:gap-3 sm:px-8 sm:pb-8">
         <button
           disabled={pagina === 1}
           onClick={() => setPagina((p) => p - 1)}
@@ -964,8 +964,8 @@ export default function Page() {
       {/* MODAL DETALLES */}
       {/* ========================================================= */}
       {modalProducto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md">
-          <div className="relative w-full max-w-5xl overflow-hidden rounded-[2rem] border border-amber-400/20 bg-[#0b0b0d] shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/75 px-3 py-4 backdrop-blur-md sm:items-center sm:px-4 sm:py-8">
+          <div className="relative max-h-[94vh] w-full max-w-5xl overflow-y-auto rounded-[1.5rem] border border-amber-400/20 bg-[#0b0b0d] shadow-[0_30px_90px_rgba(0,0,0,0.55)] sm:rounded-[2rem]">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.12),_transparent_28%)]" />
             <button
               onClick={() => setModalProducto(null)}
@@ -1160,7 +1160,7 @@ export default function Page() {
       )}
 
       <div
-        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-gray-200 bg-white p-6 shadow-xl transition-transform duration-300 ${
+        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-[92vw] flex-col border-l border-gray-200 bg-white p-4 shadow-xl transition-transform duration-300 sm:max-w-md sm:p-6 ${
           drawerAbierto ? "translate-x-0" : "translate-x-full"
         }`}
       >

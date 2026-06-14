@@ -1,58 +1,28 @@
-import Link from 'next/link';
-import Image from 'next/image';
-import { MdOutlineLiveHelp } from "react-icons/md";
-import { AiFillProduct } from "react-icons/ai";
-import { FaUser } from "react-icons/fa";
+import Link from "next/link";
+import Image from "next/image";
 import { getUserFromSession } from "@/app/Datalibs/auth";
-import LogoutButton from "./logout-button";
+import NavMenu from "./nav-menu";
 
 export default async function Nav() {
   const user = await getUserFromSession();
   return (
-    <nav className="p-4 bg-black text-white space-x-4 ">
-      <div className="flex flex-row">
-        <div className="basis-1/2">
-          <Link href={user ? "/user" : "/"}>
+    <>
+      <nav className="fixed left-0 right-0 top-0 z-[60] bg-black/95 px-3 py-3 text-white shadow-lg backdrop-blur sm:px-4">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 sm:h-16">
+          <Link href={user ? "/user" : "/"} className="inline-flex shrink-0 items-center">
             <Image
               src="/Logos/Logo2Drink.png"
               alt="Logo"
               width={100}
               height={60}
-              className="inline-block align-middle"
-            /> 
-          </Link> 
+              className="h-auto w-24 align-middle sm:w-[100px]"
+            />
+          </Link>
+
+          <NavMenu isLoggedIn={Boolean(user)} />
         </div>
-        <div className="basis-1/2">
-            <div className='flex justify-end space-x-4 text-white'>
-                <div className='justify-center'>
-                    <Link href="/pqrs/contactenos" className='flex flex-col items-center pr-4 px-2 hover:text-sky-400' >
-                        <MdOutlineLiveHelp className='text-4xl my-1'/>
-                        <p>Contáctenos</p> 
-                    </Link> 
-                </div>
-                <div className='justify-center'>
-                    <Link href="/productos" className='flex flex-col items-center pr-4 px-2 hover:text-sky-400' >
-                        <AiFillProduct className='text-4xl my-1'/>
-                        <p>Productos</p> 
-                    </Link> 
-                </div>
-                {user ? (
-                  <div className="flex flex-col items-center pr-4 px-2 text-right hover:text-sky-400">
-                    <LogoutButton />
-                    <p className="text-sm font-semibold hover:text-sky-400 my-1">Cerrar Sesión</p> 
-                  </div>
-                ) : (
-                  <div className='justify-center'>
-                    <Link href="/user_account" className='flex flex-col items-center pr-4 px-2 hover:text-sky-400' >
-                        <FaUser className='text-4xl my-1'/>
-                        <p>Mi cuenta</p> 
-                    </Link> 
-                  </div>
-                )}
-            </div>
-        </div>
-      </div>
-      
-    </nav>
+      </nav>
+      <div aria-hidden="true" className="h-20 bg-black sm:h-24" />
+    </>
   );
 }
