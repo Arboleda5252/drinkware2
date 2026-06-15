@@ -1,9 +1,7 @@
-import { NextRequest } from 'next/server';
-// Crear un nuevo usuario
-
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { sql } from '@/app/Datalibs/database';
 import { hashPassword } from '@/app/Datalibs/password';
+import { getUserFromSession } from '@/app/Datalibs/auth';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +14,10 @@ type UsuarioListado = {
   nombreusuario: string;
   rol: string | null;
   activo: boolean;
+};
+
+type UsuarioExistente = {
+  idusuario: number;
 };
 
 // GET
@@ -78,6 +80,42 @@ export async function POST(req: NextRequest) {
     if (!body[campo] || body[campo] === "") {
       return NextResponse.json({ ok: false, error: `Falta el campo obligatorio: ${campo}` }, { status: 400 });
     }
+  }
+
+  const sessionUser = await getUserFromSession().catch(() => null);
+  const canAssignRole = sessionUser?.id_rol === 2;
+  if (!canAssignRole) {
+    const roleIndex = columnas.indexOf('id_rol');
+    if (roleIndex >= 0) {
+      valores[roleIndex] = 1;
+    }
+
+    const activeIndex = columnas.indexOf('activo');
+    if (activeIndex >= 0) {
+      valores[activeIndex] = true;
+    }
+  }
+
+  try {
+    const { rows: existingUsers } = await sql<UsuarioExistente>(
+      `
+        SELECT idusuario
+        FROM usuario
+        WHERE documento = $1 OR LOWER(nombreusuario) = LOWER($2)
+        LIMIT 1;
+      `,
+      [body.documento, body.nombreusuario]
+    );
+
+    if (existingUsers[0]) {
+      return NextResponse.json(
+        { ok: false, error: 'El documento o nombre de usuario ya esta registrado' },
+        { status: 409 }
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ ok: false, error: 'Error al validar usuario' }, { status: 500 });
   }
 
   const passwordIndex = columnas.indexOf('password');

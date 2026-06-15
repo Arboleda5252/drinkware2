@@ -66,56 +66,8 @@ export default function RegisterForm() {
       if (autocompletar) {
         setDocumentInfo("");
       }
-
-      const normalize = (value: unknown) => (typeof value === "string" ? value.trim() : "");
-
-      try {
-        const usuariosRes = await fetch("/api/usuarios", { cache: "no-store" });
-        if (!usuariosRes.ok) {
-          throw new Error("No se pudo consultar usuarios");
-        }
-        const usuariosJson = await usuariosRes.json().catch(() => ({}));
-        const usuarios: any[] = Array.isArray(usuariosJson?.data) ? usuariosJson.data : [];
-        const existe = usuarios.some((user) => normalize(user.documento) === doc);
-        if (existe) {
-          setDocumentError("El documento ya está registrado");
-          return false;
-        }
-
-        if (autocompletar) {
-          try {
-            const detalleRes = await fetch("/api/Detallepedido", { cache: "no-store" });
-            if (!detalleRes.ok) {
-              throw new Error("No se pudo consultar el historial de ventas");
-            }
-            const detalleJson = await detalleRes.json().catch(() => ({}));
-            const pedidos: any[] = Array.isArray(detalleJson?.data) ? detalleJson.data : [];
-            const match = pedidos.find((pedido) => normalize(pedido.documento) === doc);
-            if (match) {
-              const nombrePedido = normalize(match.nombreCliente ?? match.nombre_cliente);
-              const telefonoPedido = normalize(match.telefonoCliente ?? match.telefono_cliente);
-              const direccionPedido = normalize(match.direccionCliente ?? match.direccion_cliente);
-              if (nombrePedido) setNombre(nombrePedido);
-              if (telefonoPedido) setTelefono(telefonoPedido);
-              if (direccionPedido) setDireccion(direccionPedido);
-              setDocumentInfo("Datos del cliente completados desde una venta anterior.");
-            } else {
-              setDocumentInfo("");
-            }
-          } catch (prefillError) {
-            console.error("[Registro] Prefill detalle pedido", prefillError);
-            setDocumentInfo("");
-          }
-        }
-
-        return true;
-      } catch (error) {
-        console.error("[Registro] Validación de documento", error);
-        setDocumentError("No se pudo validar el documento. Intenta nuevamente.");
-        return false;
-      } finally {
-        setDocumentChecking(false);
-      }
+      setDocumentChecking(false);
+      return true;
     },
     [documentValue]
   );
@@ -131,36 +83,8 @@ export default function RegisterForm() {
     setUsernameChecking(true);
     setUsernameError("");
     setUsernameInfo("");
-
-    const normalize = (value: unknown) =>
-      typeof value === "string" ? value.trim().toLowerCase() : "";
-
-    try {
-      const usuariosRes = await fetch("/api/usuarios", { cache: "no-store" });
-      if (!usuariosRes.ok) {
-        throw new Error("No se pudo consultar usuarios");
-      }
-
-      const usuariosJson = await usuariosRes.json().catch(() => ({}));
-      const usuarios: any[] = Array.isArray(usuariosJson?.data) ? usuariosJson.data : [];
-      const existe = usuarios.some(
-        (user) => normalize(user.nombreusuario) === normalize(usernameValue)
-      );
-
-      if (existe) {
-        setUsernameError("El nombre de usuario ya existe.");
-        return false;
-      }
-
-      setUsernameInfo("Nombre de usuario disponible.");
-      return true;
-    } catch (error) {
-      console.error("[Registro] Validacion de usuario", error);
-      setUsernameError("No se pudo validar el nombre de usuario.");
-      return false;
-    } finally {
-      setUsernameChecking(false);
-    }
+    setUsernameChecking(false);
+    return true;
   }, [username]);
 
   function sanitizePhone(value: string) {

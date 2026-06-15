@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { getUserFromSession } from "@/app/Datalibs/auth";
 import { sql } from "@/app/Datalibs/database";
+import UserMobileMenu from "./UserMobileMenu";
 
 type UserLayoutProps = {
   children: ReactNode;
@@ -34,21 +35,32 @@ export default async function UserLayout({ children }: UserLayoutProps) {
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950/95" />
 
       <div className="relative z-10 flex min-h-screen flex-col md:flex-row">
-        <aside className="w-full border-b border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md md:w-72 md:border-b-0 md:border-r">
-          <div className="flex h-full flex-col gap-3 px-3 py-3 md:gap-0 md:px-4 md:py-4">
+        <div className="md:hidden">
+          <UserMobileMenu
+            displayName={displayName}
+            displayRole={displayRole}
+            roleLogo={roleLogo}
+            menuLinks={menuLinks}
+          />
+        </div>
+
+        <aside className="hidden border-r border-white/10 bg-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md md:block md:w-72">
+          <div className="flex h-full flex-col gap-0 px-4 py-4">
             <Link
-              className="flex min-h-16 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 md:mb-4 md:h-44"
+              className="flex min-h-16 items-center justify-center rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 md:mb-4 md:h-32"
               href="/user"
             >
-              <div className="flex w-full items-center justify-center gap-3 text-white md:flex-col md:gap-0">
+              <div className="flex w-full items-center justify-center gap-3 text-white md:flex-col md:gap-2">
                 <Image
                   src={roleLogo}
                   alt="Logo usuario"
                   width={60}
                   height={60}
-                  className="w-full max-w-[42px] brightness-0 invert md:max-w-[60px]"
+                  className="h-10 w-10 shrink-0 object-contain brightness-0 invert md:h-12 md:w-12"
                 />
-                <p className="line-clamp-2 text-base font-semibold md:mt-3 md:text-center md:text-2xl">{displayName}</p>
+                <p className="line-clamp-2 max-w-full text-sm font-semibold leading-tight md:text-center md:text-base">
+                  {displayName}
+                </p>
               </div>
             </Link>
 
